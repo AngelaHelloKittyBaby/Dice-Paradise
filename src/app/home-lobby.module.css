@@ -1,0 +1,966 @@
+.gameLobbyPage {
+  position: relative;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 32%, rgba(30, 123, 255, 0.18), transparent 42%),
+    radial-gradient(ellipse at 0% 50%, rgba(18, 116, 233, 0.34), transparent 48%),
+    radial-gradient(ellipse at 100% 48%, rgba(34, 181, 255, 0.28), transparent 48%),
+    linear-gradient(180deg, #082c68 0%, #061b45 46%, #020b24 100%);
+  color: #ffffff;
+}
+
+.gameLobbyPage::before,
+.gameLobbyPage::after {
+  position: absolute;
+  inset: -12%;
+  content: '';
+  pointer-events: none;
+}
+
+.gameLobbyPage::before {
+  opacity: 0.72;
+  background:
+    radial-gradient(ellipse at 8% 48%, rgba(68, 189, 255, 0.28), transparent 45%),
+    radial-gradient(ellipse at 92% 52%, rgba(63, 201, 255, 0.24), transparent 45%);
+  filter: blur(34px);
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(90deg, #000 0 25%, transparent 46% 54%, #000 75% 100%);
+  mask-image: linear-gradient(90deg, #000 0 25%, transparent 46% 54%, #000 75% 100%);
+  animation: outerOceanBreath 26s ease-in-out infinite;
+}
+
+.gameLobbyPage::after {
+  opacity: 0.82;
+  background:
+    radial-gradient(ellipse at center, transparent 0 50%, rgba(2, 8, 30, 0.2) 76%, rgba(1, 4, 19, 0.62) 100%),
+    linear-gradient(90deg, rgba(1, 8, 30, 0.5), transparent 18% 82%, rgba(1, 8, 30, 0.5));
+}
+
+.lobbyViewport {
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+  z-index: 1;
+  aspect-ratio: 16 / 9;
+  box-shadow: 0 0 80px rgba(14, 88, 213, 0.18);
+}
+
+.lobbyViewport::before,
+.lobbyViewport::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+}
+
+.lobbyViewport::before {
+  z-index: 0;
+  opacity: 0.72;
+  background:
+    linear-gradient(90deg, rgba(3, 13, 43, 0.62), transparent 14% 86%, rgba(3, 13, 43, 0.62)),
+    radial-gradient(ellipse at 50% 102%, rgba(28, 147, 255, 0.24), transparent 48%);
+  filter: blur(10px);
+  mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(ellipse at center, transparent 0 46%, #000 82%);
+  mask-image: radial-gradient(ellipse at center, transparent 0 46%, #000 82%);
+}
+
+.lobbyViewport::after {
+  z-index: 2;
+  opacity: 0.42;
+  background:
+    radial-gradient(circle at 12% 46%, rgba(97, 219, 255, 0.2), transparent 22%),
+    radial-gradient(circle at 88% 42%, rgba(92, 188, 255, 0.18), transparent 24%);
+  filter: blur(18px);
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(90deg, #000 0 18%, transparent 36% 64%, #000 82% 100%);
+  mask-image: linear-gradient(90deg, #000 0 18%, transparent 36% 64%, #000 82% 100%);
+  animation: viewportEdgeFlow 24s ease-in-out infinite;
+}
+
+.lobbyStage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  isolation: isolate;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  transform-origin: top left;
+}
+
+.lobbyStage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(255, 241, 169, 0.12), transparent 34%),
+    linear-gradient(90deg, rgba(8, 24, 70, 0.46), transparent 22%, transparent 76%, rgba(8, 24, 70, 0.38)),
+    linear-gradient(180deg, rgba(5, 17, 45, 0.24), transparent 32%, rgba(4, 12, 38, 0.28));
+  pointer-events: none;
+}
+
+.lobbyHeader {
+  position: absolute;
+  top: 32px;
+  left: 32px;
+  right: 32px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.playerProfile {
+  display: flex;
+  align-items: center;
+  width: 416px;
+  min-height: 106px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(20, 40, 90, 0.96), rgba(10, 20, 50, 0.94));
+  box-shadow: 0 18px 36px rgba(0, 20, 64, 0.32), inset 0 2px 10px rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.playerProfile:hover,
+.playerProfile:focus-visible {
+  border-color: rgba(255, 216, 83, 0.86);
+  box-shadow: 0 18px 36px rgba(0, 30, 90, 0.28), 0 0 0 3px rgba(255, 210, 74, 0.2);
+  transform: translateY(-2px);
+}
+
+.avatarSlot,
+.miniAvatarSlot,
+.taskIconSlot,
+.rewardIconSlot,
+.actionIconSlot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.26), 0 6px 16px rgba(0, 25, 70, 0.18);
+}
+
+.avatarSlot {
+  width: 78px;
+  height: 78px;
+  border-radius: 18px;
+  background-color: #dff4ff;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.playerInfo {
+  min-width: 0;
+  margin-left: 14px;
+  flex: 1;
+}
+
+.playerNameRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.playerName {
+  overflow: hidden;
+  margin: 0;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-shadow: 0 3px 8px rgba(0, 32, 80, 0.32);
+  white-space: nowrap;
+}
+
+.vipBadgeSlot {
+  min-width: 58px;
+  padding: 5px 10px;
+  border: 2px solid rgba(255, 239, 155, 0.9);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffd966, #ff9f24);
+  color: #8b4200;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 6px 14px rgba(138, 73, 0, 0.22);
+}
+
+.playerMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.playerStars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #ffe071;
+}
+
+.levelTrack {
+  width: 152px;
+  height: 9px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.levelTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd24a, #ff8b24);
+}
+
+.headerNotice {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(480px, 34vw);
+  transform: translateX(-50%);
+  padding: 9px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(20, 70, 150, 0.94), rgba(8, 30, 82, 0.92));
+  color: #ffef7a;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(0, 48, 130, 0.16);
+  backdrop-filter: blur(6px);
+}
+
+.headerTools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.currencyPill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 172px;
+  height: 54px;
+  padding: 0 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(28, 74, 154, 0.96), rgba(9, 25, 72, 0.94));
+  color: #ffffff;
+  font-size: 16px;
+  box-shadow: 0 10px 22px rgba(0, 33, 94, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.toolButton {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(36, 91, 184, 0.96), rgba(10, 31, 88, 0.94));
+  color: #d8ecff;
+  box-shadow: inset 0 2px 8px rgba(255, 255, 255, 0.2), 0 8px 18px rgba(0, 28, 80, 0.2);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.toolButton:hover {
+  background: linear-gradient(180deg, rgba(53, 124, 230, 0.98), rgba(12, 47, 126, 0.96));
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.authPromptOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 13, 42, 0.42);
+  backdrop-filter: blur(6px);
+}
+
+.authPromptDialog {
+  width: 360px;
+  padding: 24px;
+  border: 1px solid rgba(255, 235, 148, 0.62);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(250, 253, 255, 0.98), rgba(216, 235, 255, 0.96));
+  color: #15366f;
+  text-align: center;
+  box-shadow: 0 24px 48px rgba(0, 20, 72, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.8);
+}
+
+.authPromptDialog h2 {
+  margin: 0;
+  color: #0d4aa5;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.authPromptDialog p {
+  margin: 10px 0 20px;
+  color: #416494;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.authPromptActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.authPromptActions button {
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(22, 88, 180, 0.2);
+  cursor: pointer;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+.authPromptActions button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.authPromptActions button:first-child {
+  background: linear-gradient(180deg, #51b8ff, #2368dc);
+}
+
+.authPromptActions button:nth-child(2) {
+  background: linear-gradient(180deg, #ffcb61, #f3931f);
+}
+
+.authPromptActions button:last-child {
+  grid-column: 1 / -1;
+  background: rgba(42, 76, 126, 0.72);
+}
+
+.leftSidebar {
+  position: absolute;
+  top: 170px;
+  left: 32px;
+  z-index: 8;
+  display: grid;
+  width: 304px;
+  gap: 16px;
+}
+
+.sidePanel {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 18px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(20, 40, 90, 0.96), rgba(10, 20, 50, 0.94));
+  box-shadow: 0 18px 38px rgba(0, 18, 60, 0.34), inset 0 2px 12px rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+}
+
+.leaderboardPanel {
+  min-height: 284px;
+}
+
+.friendsPanel {
+  min-height: 264px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panelHeader h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-shadow: 0 2px 8px rgba(0, 32, 92, 0.28);
+}
+
+.panelHeader a,
+.panelHeader span,
+.panelFooterLink {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.leaderboardList,
+.friendList,
+.taskList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leaderboardList,
+.friendList {
+  gap: 10px;
+}
+
+.leaderboardItem,
+.friendItem {
+  display: grid;
+  grid-template-columns: 32px 46px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(71, 122, 209, 0.28), rgba(27, 55, 118, 0.22));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.friendItem {
+  grid-template-columns: 46px 1fr auto;
+}
+
+.rankBadge {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffe178, #ff9f1d);
+  color: #835006;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.miniAvatarSlot {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.entryName {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entryScore {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #ffe071;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.onlineStatus,
+.busyStatus {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.onlineStatus {
+  color: #57ff9f;
+}
+
+.busyStatus {
+  color: #ffd35f;
+}
+
+.panelFooterLink {
+  display: block;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.mainActions {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  z-index: 7;
+  display: grid;
+  width: 1040px;
+  grid-template-columns: repeat(4, 246px);
+  gap: 18px;
+  transform: translateX(-50%);
+}
+
+.actionCard {
+  position: relative;
+  display: flex;
+  width: 246px;
+  height: 413px;
+  overflow: hidden;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 28px 18px 22px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 22px;
+  isolation: isolate;
+  background: linear-gradient(180deg, rgba(59, 186, 255, 0.72), rgba(28, 103, 223, 0.64));
+  color: #ffffff;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.32), 0 18px 32px rgba(0, 28, 90, 0.25);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  will-change: transform;
+}
+
+.actionCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--action-bg);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  transform: scale(1.01);
+  transition: transform 180ms ease;
+}
+
+.actionCard::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(
+      112deg,
+      transparent 0 34%,
+      rgba(255, 246, 176, 0.22) 44%,
+      transparent 54% 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(4, 21, 62, 0.06) 0%,
+      rgba(4, 18, 55, 0.08) 38%,
+      rgba(3, 12, 37, 0.5) 100%
+    );
+  background-position: -260px 0, 0 0;
+  background-size: 240% 100%, 100% 100%;
+  animation: cardSheen 14s ease-in-out infinite;
+  pointer-events: none;
+  will-change: background-position, opacity;
+}
+
+.actionCard:hover {
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.36), 0 22px 38px rgba(0, 35, 105, 0.32);
+  transform: translateY(-4px);
+}
+
+.actionCard:hover::before {
+  transform: scale(1.045);
+}
+
+.startGame {
+  background-color: #168fe8;
+}
+
+.startGame .actionIconSlot {
+  border-color: rgba(170, 232, 255, 0.94);
+  background: radial-gradient(circle at 34% 24%, #78e7ff 0%, #1c91ff 46%, #0755df 100%);
+  color: #ffffff;
+  box-shadow: inset 0 4px 10px rgba(255, 255, 255, 0.4), 0 10px 22px rgba(20, 139, 255, 0.45);
+}
+
+.createRoom {
+  background-color: #d18a2c;
+}
+
+.createRoom .actionIconSlot {
+  border-color: rgba(255, 237, 158, 0.95);
+  background: radial-gradient(circle at 34% 24%, #ffe781 0%, #ffaf25 48%, #df7610 100%);
+  color: #ffffff;
+  box-shadow: inset 0 4px 10px rgba(255, 255, 255, 0.42), 0 10px 22px rgba(255, 159, 27, 0.43);
+}
+
+.botBattle {
+  background-color: #2fc0a7;
+}
+
+.botBattle .actionIconSlot {
+  border-color: rgba(160, 255, 207, 0.95);
+  background: radial-gradient(circle at 34% 24%, #87ffd1 0%, #21c978 46%, #108756 100%);
+  color: #ffffff;
+  box-shadow: inset 0 4px 10px rgba(255, 255, 255, 0.38), 0 10px 22px rgba(22, 203, 124, 0.42);
+}
+
+.events {
+  background-color: #7c4be0;
+}
+
+.events .actionIconSlot {
+  border-color: rgba(225, 183, 255, 0.95);
+  background: radial-gradient(circle at 34% 24%, #e2a0ff 0%, #9558ff 46%, #642fd0 100%);
+  color: #ffffff;
+  box-shadow: inset 0 4px 10px rgba(255, 255, 255, 0.38), 0 10px 22px rgba(138, 79, 255, 0.43);
+}
+
+.actionIconSlot svg {
+  animation: iconFloat 9s ease-in-out infinite;
+  filter: drop-shadow(0 4px 6px rgba(0, 32, 96, 0.3));
+  will-change: transform;
+}
+
+.primaryTag {
+  position: absolute;
+  top: -1px;
+  left: 18px;
+  z-index: 2;
+  min-width: 70px;
+  padding: 6px 12px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(180deg, #ffe67a, #ffb22c);
+  color: #774100;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 6px 14px rgba(120, 58, 0, 0.18);
+}
+
+.actionCopy {
+  position: relative;
+  z-index: 2;
+  margin-top: 28px;
+}
+
+.actionCopy h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 34px;
+  font-weight: 1000;
+  line-height: 1.08;
+  letter-spacing: 0;
+  text-shadow: 0 3px 0 rgba(70, 38, 0, 0.18), 0 5px 14px rgba(0, 30, 90, 0.34);
+}
+
+.actionCopy p {
+  margin: 9px 0 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(0, 25, 80, 0.3);
+}
+
+.actionIconSlot {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  z-index: 2;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.dailyTasks {
+  position: absolute;
+  top: 370px;
+  right: 36px;
+  z-index: 8;
+  width: 356px;
+  padding: 20px;
+  border: 1px solid rgba(127, 202, 255, 0.72);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(20, 40, 90, 0.96), rgba(10, 20, 50, 0.94));
+  color: #ffffff;
+  box-shadow: 0 20px 42px rgba(0, 20, 64, 0.34), inset 0 2px 12px rgba(255, 255, 255, 0.14);
+  backdrop-filter: none;
+}
+
+.dailyTasks .panelHeader h2 {
+  color: #ffffff;
+  font-size: 26px;
+  text-shadow: 0 3px 10px rgba(0, 24, 86, 0.36);
+}
+
+.dailyTasks .panelHeader a {
+  color: #bfe7ff;
+  font-size: 16px;
+}
+
+.taskList {
+  gap: 12px;
+}
+
+.taskItem {
+  display: grid;
+  grid-template-columns: 40px 1fr 76px;
+  align-items: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 10px;
+  border: 1px solid rgba(141, 191, 245, 0.56);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #e8f4ff 100%);
+  box-shadow: 0 8px 18px rgba(42, 118, 205, 0.13);
+}
+
+.taskIconSlot {
+  width: 38px;
+  height: 38px;
+  border-color: rgba(255, 255, 255, 0.68);
+  border-radius: 10px;
+  color: #ffffff;
+}
+
+.taskIconGold {
+  background: linear-gradient(145deg, #ffdf75, #ff9d26);
+  color: #7c4200;
+}
+
+.taskIconBlue {
+  background: linear-gradient(145deg, #6be4ff, #1268ff);
+  color: #ffffff;
+}
+
+.taskIconPurple {
+  background: linear-gradient(145deg, #d39aff, #7547e8);
+  color: #ffffff;
+}
+
+.taskIconGreen {
+  background: linear-gradient(145deg, #92ff9d, #19aa6e);
+  color: #063f26;
+}
+
+.taskContent {
+  min-width: 0;
+}
+
+.taskTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.taskTitleRow strong {
+  overflow: hidden;
+  color: #0a3591;
+  font-size: 16px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskTitleRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1d5bc1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.rewardIconSlot {
+  width: 22px;
+  height: 22px;
+  border-color: rgba(255, 216, 75, 0.76);
+  border-radius: 50%;
+  background: rgba(255, 216, 75, 0.28);
+}
+
+.taskProgress {
+  height: 7px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #c5d8ef;
+}
+
+.taskProgress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #54d47b, #31a8ff);
+}
+
+.taskContent small {
+  color: #4b76b5;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.taskAction {
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #37b7ff, #1269e8);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(25, 100, 220, 0.24);
+  cursor: pointer;
+}
+
+.taskItem:first-child .taskAction {
+  background: linear-gradient(180deg, #ffcf5c, #ff9828);
+  color: #7a3f00;
+  box-shadow: 0 8px 16px rgba(230, 116, 20, 0.25);
+}
+
+.chatDock {
+  position: absolute;
+  bottom: 24px;
+  left: 30px;
+  z-index: 5;
+  width: 400px;
+  max-width: 400px;
+  transform-origin: left bottom;
+}
+
+.customizeButton {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  width: 356px;
+  height: 82px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(35, 73, 156, 0.96), rgba(10, 22, 58, 0.94));
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 900;
+  box-shadow: 0 16px 34px rgba(0, 18, 60, 0.32), inset 0 2px 10px rgba(255, 255, 255, 0.12);
+  transform: translateX(-50%);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.customizeButton .actionIconSlot {
+  position: relative;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  margin-right: 12px;
+  bottom: auto;
+  left: auto;
+  z-index: auto;
+  border-color: rgba(255, 255, 255, 0.76);
+  background: linear-gradient(135deg, #ffdd69 0%, #ff6cae 34%, #7b61ff 68%, #22d3ee 100%);
+  color: #ffffff;
+  transform: none;
+}
+
+.customizeButton .actionIconSlot svg:last-child {
+  position: absolute;
+  right: -2px;
+  top: -3px;
+  color: #fff477;
+  filter: drop-shadow(0 2px 4px rgba(127, 72, 0, 0.35));
+}
+
+@keyframes outerOceanBreath {
+  0%,
+  100% {
+    opacity: 0.54;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    opacity: 0.82;
+    transform: translate3d(0, -8px, 0) scale(1.04);
+  }
+}
+
+@keyframes viewportEdgeFlow {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: translate3d(-12px, 0, 0);
+  }
+
+  50% {
+    opacity: 0.48;
+    transform: translate3d(12px, 0, 0);
+  }
+}
+
+@keyframes cardSheen {
+  0%,
+  100% {
+    background-position: -280px 0, 0 0;
+    opacity: 0.86;
+  }
+
+  46% {
+    background-position: 420px 0, 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes iconFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+
+  48% {
+    transform: translate3d(0, -4px, 0) rotate(2deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .chatDock {
+    bottom: 18px;
+    left: 20px;
+    width: 360px;
+    max-width: 360px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gameLobbyPage::before,
+  .lobbyViewport::after,
+  .actionCard::after,
+  .actionIconSlot svg {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
