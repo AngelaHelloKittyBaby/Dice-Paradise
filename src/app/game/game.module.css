@@ -525,9 +525,11 @@
   position: absolute;
   right: 36px;
   z-index: 34;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 22px;
-  background: rgba(244, 249, 255, 0.93);
+  background: linear-gradient(180deg, #f8fcff 0%, #edf6ff 52%, #dfeeff 100%);
   color: #0f4aa2;
   box-shadow: 0 18px 34px rgba(0, 14, 42, 0.3);
   backdrop-filter: blur(12px);
@@ -535,17 +537,18 @@
 
 .scorePanel {
   top: 100px;
-  width: 478px;
-  height: 690px;
+  width: 560px;
+  height: 704px;
 }
 
 .scorePanel h2,
 .eventPanel h2 {
+  flex: 0 0 auto;
   margin: 0;
-  padding: 16px 22px;
-  background: rgba(220, 235, 255, 0.72);
+  padding: 15px 22px;
+  background: linear-gradient(180deg, #dcecff 0%, #c9e0ff 100%);
   color: #0d4dac;
-  font-size: 23px;
+  font-size: 24px;
   font-weight: 1000;
   text-align: center;
 }
@@ -557,9 +560,10 @@
 
 .scoreHeader {
   display: grid;
-  grid-template-columns: 178px repeat(var(--score-columns), minmax(54px, 1fr));
+  flex: 0 0 auto;
+  grid-template-columns: 244px repeat(var(--score-columns), minmax(66px, 1fr));
   align-items: center;
-  padding: 8px 16px 7px;
+  padding: 10px 18px 8px;
   border-bottom: 1px solid rgba(31, 83, 160, 0.12);
 }
 
@@ -570,30 +574,33 @@
 }
 
 .scoreAvatar {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 1000;
 }
 
 .scorePlayer small {
   color: #1a69c3;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 1.1;
 }
 
 .scoreBody {
   display: grid;
-  padding: 0 12px 12px;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: repeat(14, minmax(0, 1fr));
+  padding: 0 14px 14px;
 }
 
 .scoreRow {
   display: grid;
   width: 100%;
-  grid-template-columns: 178px repeat(var(--score-columns), minmax(54px, 1fr));
-  min-height: 31px;
+  grid-template-columns: 244px repeat(var(--score-columns), minmax(66px, 1fr));
+  min-height: 0;
   align-items: center;
   border: 0;
   border-bottom: 1px solid rgba(31, 83, 160, 0.13);
@@ -611,7 +618,7 @@
 }
 
 .scoreRowSelectable:hover {
-  background: rgba(55, 151, 255, 0.12);
+  background: linear-gradient(90deg, rgba(255, 214, 73, 0.2), rgba(55, 151, 255, 0.12));
 }
 
 .ruleCell {
@@ -619,8 +626,8 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 4px;
-  padding-left: 44px;
+  gap: 7px;
+  padding-left: 58px;
   color: #0f4aa2;
 }
 
@@ -629,7 +636,7 @@
   min-width: 0;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 1000;
   white-space: nowrap;
 }
@@ -637,7 +644,7 @@
 .ruleCell small {
   overflow: hidden;
   color: #4770ad;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -648,34 +655,45 @@
   left: 0;
   top: 50%;
   display: grid;
-  width: 36px;
-  min-height: 26px;
+  width: 48px;
+  min-height: 30px;
   place-items: center;
-  border-radius: 8px;
-  background: rgba(188, 211, 242, 0.7);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #d5e8ff, #b7d4ff);
   color: #1857b1;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 1000;
   transform: translateY(-50%);
 }
 
 .scoreValue {
   color: #0d4dac;
-  font-size: 17px;
+  font-size: 22px;
   font-weight: 1000;
   text-align: center;
+}
+
+.scoreValueFilled {
+  color: #0453bf;
+  text-shadow: 0 2px 8px rgba(48, 137, 255, 0.24);
+}
+
+.scoreValuePossible {
+  color: #ff8a00;
+  text-shadow: 0 2px 8px rgba(255, 180, 42, 0.42);
 }
 
 .eventPanel {
   right: 36px;
   bottom: 28px;
-  width: 478px;
-  height: 260px;
+  width: 560px;
+  height: 248px;
 }
 
 .eventPanel ul {
   display: grid;
-  max-height: 198px;
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 10px 26px 22px;
   overflow-y: auto;

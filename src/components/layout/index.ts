@@ -12,5 +12,8 @@ export type { GameLayoutProps } from './GameLayout';
 export { ResponsiveStage } from './ResponsiveStage';
 export type { ResponsiveStageProps } from './ResponsiveStage';
 
+export { IslandTopNav } from './IslandTopNav';
+export type { IslandNavKey, IslandTopNavProps } from './IslandTopNav';
+
 export { LobbyAmbientEffects } from './LobbyAmbientEffects';
 export { PreventBrowserZoom } from './PreventBrowserZoom';

@@ -149,7 +149,7 @@ function RuleBadge({ item, index }: { item: RuleItem; index: number }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * index, duration: 0.22 }}
-      className="group flex gap-3 rounded-[15px] border border-[#cfe5ff]/72 bg-white/54 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_8px_18px_rgba(26,86,164,0.08)] transition-all duration-300 hover:-translate-y-[2px] hover:border-[#80cfff] hover:bg-white/72 hover:shadow-[0_12px_24px_rgba(35,122,255,0.16),0_0_18px_rgba(83,188,255,0.26)]"
+      className="group flex gap-3 rounded-[15px] border border-[#b8d9ff] bg-[#f7fbff] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_18px_rgba(26,86,164,0.1)] transition-all duration-300 hover:-translate-y-[2px] hover:border-[#55bcff] hover:bg-white hover:shadow-[0_12px_24px_rgba(35,122,255,0.18),0_0_18px_rgba(83,188,255,0.28)]"
     >
       <span
         className={`grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-gradient-to-br ${item.tone} shadow-[0_7px_14px_rgba(25,88,170,0.2)]`}
@@ -184,7 +184,7 @@ function RuleSectionBlock({ section, sectionIndex }: { section: RuleSection; sec
         </p>
       )}
       {section.highlight && (
-        <div className="mt-3 rounded-[14px] border border-[#ffb7a8]/70 bg-gradient-to-r from-[#fff5f1]/88 to-[#fff8d8]/88 px-4 py-3 text-[15px] font-black text-[#e24b39] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+        <div className="mt-3 rounded-[14px] border border-[#ffb7a8] bg-gradient-to-r from-[#fff1eb] to-[#fff7d4] px-4 py-3 text-[15px] font-black text-[#e24b39] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
           {section.highlight}
         </div>
       )}
@@ -202,7 +202,7 @@ export function GameRulesModal({ open, onClose }: GameRulesModalProps) {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="absolute inset-0 z-[90] grid place-items-center bg-[#041338]/54 backdrop-blur-[12px]"
+          className="absolute inset-0 z-[90] grid place-items-center bg-[#041338]/68 backdrop-blur-[12px]"
           role="presentation"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -211,7 +211,7 @@ export function GameRulesModal({ open, onClose }: GameRulesModalProps) {
           onClick={onClose}
         >
           <motion.section
-            className="relative w-[620px] overflow-hidden rounded-[24px] border-[3px] border-[#8fd8ff] bg-white/88 text-[#153772] shadow-[0_30px_80px_rgba(5,30,92,0.38),0_0_36px_rgba(93,190,255,0.55),inset_0_2px_16px_rgba(255,255,255,0.78)] backdrop-blur-[12px]"
+            className="relative w-[620px] overflow-hidden rounded-[24px] border-[3px] border-[#8fd8ff] bg-gradient-to-b from-[#fbfdff] via-[#edf7ff] to-[#d9ebff] text-[#153772] shadow-[0_30px_80px_rgba(5,30,92,0.42),0_0_36px_rgba(93,190,255,0.58),inset_0_2px_16px_rgba(255,255,255,0.86)]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="game-rules-title"
@@ -225,7 +225,7 @@ export function GameRulesModal({ open, onClose }: GameRulesModalProps) {
             <div className="pointer-events-none absolute -right-16 -top-16 h-[190px] w-[190px] rounded-full bg-[#5ecbff]/22 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-24 -left-14 h-[210px] w-[210px] rounded-full bg-[#7763ff]/16 blur-3xl" />
 
-            <header className="relative flex h-[82px] items-center gap-4 border-b border-[#cfe1f7] bg-gradient-to-r from-[#f7fbff]/88 via-[#eaf5ff]/92 to-[#f7fbff]/88 px-7">
+            <header className="relative flex h-[82px] items-center gap-4 border-b border-[#cfe1f7] bg-gradient-to-r from-[#f8fcff] via-[#e7f4ff] to-[#f8fcff] px-7">
               <span className="grid h-[44px] w-[44px] place-items-center rounded-[14px] bg-gradient-to-br from-[#7bdcff] to-[#166fff] text-white shadow-[0_10px_20px_rgba(26,111,225,0.28)]">
                 <Anchor size={28} strokeWidth={3} />
               </span>
@@ -242,7 +242,7 @@ export function GameRulesModal({ open, onClose }: GameRulesModalProps) {
                 type="button"
                 aria-label="关闭规则说明"
                 onClick={onClose}
-                className="absolute right-5 top-1/2 grid h-[40px] w-[40px] -translate-y-1/2 place-items-center rounded-full border border-[#b8d7ff] bg-white/78 text-[#1455b8] shadow-[0_8px_16px_rgba(28,90,170,0.16),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:scale-110 hover:bg-[#eaf6ff] hover:text-[#0c6af1]"
+                className="absolute right-5 top-1/2 grid h-[40px] w-[40px] -translate-y-1/2 place-items-center rounded-full border border-[#b8d7ff] bg-[#f8fcff] text-[#1455b8] shadow-[0_8px_16px_rgba(28,90,170,0.16),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:scale-110 hover:bg-[#eaf6ff] hover:text-[#0c6af1]"
               >
                 <X size={22} strokeWidth={3} />
               </button>
@@ -258,7 +258,7 @@ export function GameRulesModal({ open, onClose }: GameRulesModalProps) {
                 ))}
               </div>
 
-              <div className="pointer-events-none sticky bottom-0 mt-4 flex justify-end bg-gradient-to-t from-white/88 via-white/58 to-transparent pt-12">
+              <div className="pointer-events-none sticky bottom-0 mt-4 flex justify-end bg-[#edf7ff] pt-4">
                 <div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-gradient-to-br from-[#ffef78] via-[#ff744a] to-[#3269d9] text-[36px] shadow-[0_12px_26px_rgba(24,82,170,0.22),inset_0_4px_10px_rgba(255,255,255,0.46)]">
                   🛟
                 </div>

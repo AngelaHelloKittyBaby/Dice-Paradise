@@ -20,11 +20,10 @@ import {
   Share2,
   ShieldCheck,
   Swords,
-  Target,
   Trophy,
-  User,
   Users,
 } from 'lucide-react';
+import { IslandTopNav } from '@/components/layout';
 import { StarIcon } from '@/components/ui';
 import activePageBackground from '@/assets/images/backgrounds/activity/activity-bg.png';
 
@@ -249,13 +248,6 @@ const castleRewardCards: TitleReward[] = [
     icon: Trophy,
     tone: 'from-[#d5c1ff] to-[#8f5cff]',
   },
-];
-
-const navItems = [
-  { label: '游戏大厅', href: '/', icon: Castle },
-  { label: '排行榜', href: '/leaderboard', icon: Medal },
-  { label: '活动', href: '/activity', icon: Gift, active: true },
-  { label: '个人中心', href: '/profile', icon: User },
 ];
 
 const taskMap = mockTaskApiResponse.taskGroups;
@@ -532,57 +524,6 @@ function CastleProgressPanel() {
   );
 }
 
-function TopNavigation() {
-  return (
-    <header className="absolute left-0 top-0 z-20 flex h-[86px] w-full items-center justify-between bg-gradient-to-r from-[#041877] via-[#062caf] to-[#041877] px-[40px] shadow-[0_12px_28px_rgba(0,16,92,0.26)]">
-      <Link href="/" aria-label="返回投骰乐园首页" className="flex items-center gap-3 text-white no-underline">
-        <span className="grid h-[58px] w-[58px] place-items-center rounded-[16px] border-2 border-white/80 bg-gradient-to-br from-white to-[#9ed5ff] text-[36px] text-[#0a64c8] shadow-[0_10px_22px_rgba(0,20,60,0.28),inset_0_3px_8px_rgba(255,255,255,0.7)]">
-          🎲
-        </span>
-        <strong className="text-[32px] font-black leading-[0.92] tracking-[0] text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.45)]">
-          投骰乐园
-          <small className="mt-2 block text-[15px] font-black tracking-[2px]">DICE PARADISE</small>
-        </strong>
-      </Link>
-
-      <nav className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-[46px]">
-        {navItems.map(item => {
-          const Icon = item.icon;
-
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-            className={`flex h-[48px] items-center gap-3 rounded-full px-7 text-[21px] font-black transition-all duration-300 hover:-translate-y-[3px] ${
-              item.active
-                ? 'border border-white/42 bg-gradient-to-r from-[#fff2b0] to-[#ffbd4a] text-[#814c00] shadow-[0_10px_22px_rgba(196,113,18,0.34),inset_0_2px_8px_rgba(255,255,255,0.35)]'
-                : 'text-white/94 hover:bg-[#1f6fff] hover:shadow-[0_12px_24px_rgba(42,128,255,0.28)]'
-            }`}
-            >
-              <Icon
-                size={26}
-                strokeWidth={2.8}
-                className={item.active ? 'text-[#ff6b2a]' : 'text-[#dff6ff]'}
-                fill={item.active ? 'rgba(255, 180, 50, 0.28)' : 'transparent'}
-              />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="flex items-center gap-4">
-        <div className="flex h-[50px] items-center gap-3 rounded-full border border-white/25 bg-[#07156a]/48 pl-2 pr-5 shadow-[inset_0_2px_8px_rgba(255,255,255,0.18)] backdrop-blur">
-          <span className="grid h-[44px] w-[44px] place-items-center rounded-full bg-gradient-to-b from-[#fff28b] to-[#ff9b1f] shadow-[0_6px_12px_rgba(128,70,0,0.28)]">
-            <StarIcon size={36} />
-          </span>
-          <strong className="text-[22px] font-black">120</strong>
-        </div>
-      </div>
-    </header>
-  );
-}
-
 function ActivePage() {
   const [activeType, setActiveType] = useState<TaskType>('daily');
   const scale = useStageScale();
@@ -633,7 +574,19 @@ function ActivePage() {
           <div className="absolute inset-0 bg-gradient-to-b from-[#0a7cff]/8 via-[#0639bb]/12 to-[#021b7a]/30" />
           <div className="absolute inset-0 bg-[#055dff]/5 backdrop-saturate-150" />
 
-          <TopNavigation />
+          <IslandTopNav
+            activeItem="activity"
+            rightSlot={
+              <div className="flex items-center gap-4">
+                <div className="flex h-[50px] items-center gap-3 rounded-full border border-white/25 bg-[#07156a]/48 pl-2 pr-5 shadow-[inset_0_2px_8px_rgba(255,255,255,0.18)] backdrop-blur">
+                  <span className="grid h-[44px] w-[44px] place-items-center rounded-full bg-gradient-to-b from-[#fff28b] to-[#ff9b1f] shadow-[0_6px_12px_rgba(128,70,0,0.28)]">
+                    <StarIcon size={36} />
+                  </span>
+                  <strong className="text-[22px] font-black">120</strong>
+                </div>
+              </div>
+            }
+          />
 
           <Link
             href="/"

@@ -10,11 +10,11 @@ const signLights = Array.from({ length: 9 }, (_, index) => `sign-light-${index}`
 const diceParticles = Array.from({ length: 12 }, (_, index) => `dice-particle-${index}`);
 const skyParticles = Array.from({ length: 8 }, (_, index) => `sky-particle-${index}`);
 const edgeParticles = Array.from({ length: 16 }, (_, index) => `edge-particle-${index}`);
-const cloudBanks = Array.from({ length: 4 }, (_, index) => `cloud-bank-${index}`);
-const ambientBirds = Array.from({ length: 7 }, (_, index) => `ambient-bird-${index}`);
+const cloudBanks = Array.from({ length: 9 }, (_, index) => `cloud-bank-${index}`);
+const ambientBirds = Array.from({ length: 12 }, (_, index) => `ambient-bird-${index}`);
 const ambientBalloons = Array.from({ length: 3 }, (_, index) => `ambient-balloon-${index}`);
-const waveSparkles = Array.from({ length: 32 }, (_, index) => `wave-sparkle-${index}`);
-const floorSparkles = Array.from({ length: 26 }, (_, index) => `floor-sparkle-${index}`);
+const waveSparkles = Array.from({ length: 44 }, (_, index) => `wave-sparkle-${index}`);
+const floorSparkles = Array.from({ length: 40 }, (_, index) => `floor-sparkle-${index}`);
 
 export const LobbyAmbientEffects: React.FC = () => {
   return (
@@ -28,8 +28,12 @@ export const LobbyAmbientEffects: React.FC = () => {
           <motion.div
             key={key}
             className={styles.cloudBank}
-            animate={{ x: index % 2 === 0 ? [0, 84, 0] : [0, -72, 0], y: [0, -6, 0], opacity: [0.52, 0.88, 0.58] }}
-            transition={{ duration: 7.5 + index * 1.15, repeat: Infinity, ease: 'easeInOut' }}
+            animate={{
+              x: index % 2 === 0 ? [0, 168, -32, 0] : [0, -142, 28, 0],
+              y: index % 3 === 0 ? [0, -18, 10, 0] : [0, 12, -14, 0],
+              opacity: [0.42, 0.82, 0.58, 0.42],
+            }}
+            transition={{ duration: 18 + index * 1.65, repeat: Infinity, ease: 'easeInOut' }}
           />
         ))}
       </div>
@@ -40,11 +44,11 @@ export const LobbyAmbientEffects: React.FC = () => {
             key={key}
             className={styles.ambientBird}
             animate={{
-              x: index % 2 === 0 ? [0, 118, 0] : [0, -104, 0],
-              y: [0, -18, 10, 0],
+              x: index % 2 === 0 ? [0, 260, 112, 0] : [0, -230, -86, 0],
+              y: index % 3 === 0 ? [0, -36, 22, 0] : [0, 28, -20, 0],
               opacity: [0.7, 0.98, 0.76],
             }}
-            transition={{ duration: 6.6 + index * 0.65, repeat: Infinity, ease: 'easeInOut' }}
+            transition={{ duration: 18 + index * 1.05, repeat: Infinity, ease: 'easeInOut' }}
           >
             <span className={styles.birdSilhouette} />
           </motion.span>

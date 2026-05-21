@@ -20,7 +20,15 @@ import { CATEGORY_NAMES, MAX_ROLLS_PER_TURN, SCORE_CATEGORIES } from '@/constant
 import gameBackground from '@/assets/images/backgrounds/game/game-bg.png';
 import { usePlayerStore, useRoomStore } from '@/stores';
 import type { DiceValue, ScoreCategory } from '@/types/game';
-import { calculateGrandTotal, calculateScore, getPossibleScores } from '@/utils/scoreCalculator';
+import type { GameResultData } from '@/types/gameResult';
+import {
+  calculateGrandTotal,
+  calculateLowerTotal,
+  calculateScore,
+  calculateUpperBonus,
+  calculateUpperSubtotal,
+  getPossibleScores,
+} from '@/utils/scoreCalculator';
 import styles from './game.module.css';
 
 interface GamePlayer {
@@ -66,9 +74,9 @@ const avatarClasses = [
 ];
 
 const defaultGameEvents: GameEventItem[] = [
-  { id: 'event-1', text: '系统已创建本局记录，等待玩家首次投骰。' },
-  { id: 'event-2', text: '每回合最多 3 次投掷，请合理锁定骰子。' },
-  { id: 'event-3', text: '计分选择会通过预留接口同步到后端。' },
+  { id: 'event-1', text: '本局开始，等待玩家首次投骰。' },
+  { id: 'event-2', text: '每回合最多 3 次投掷，可以保留想要的骰子。' },
+  { id: 'event-3', text: '投骰后选择一个计分项，本项得分会加入总分。' },
 ];
 
 function delay(ms: number) {
@@ -97,13 +105,59 @@ async function mockSelectScore(payload: SelectScorePayload): Promise<number> {
   return calculateScore(payload.dice, payload.category);
 }
 
-async function mockFetchGameEvents(roomId: string, playerName: string): Promise<GameEventItem[]> {
+function formatDiceValues(values: DiceValue[]) {
+  return values.map(value => `${value}点`).join('、');
+}
+
+function getBestPossibleScore(possibleScores: Partial<Record<ScoreCategory, number>>) {
+  return Object.entries(possibleScores).reduce<{ category: ScoreCategory; score: number } | null>(
+    (best, [category, score]) => {
+      if (score === undefined) return best;
+      if (!best || score > best.score) {
+        return { category: category as ScoreCategory, score };
+      }
+
+      return best;
+    },
+    null
+  );
+}
+
+function getUpperBonusAward(
+  previousScores: Partial<Record<ScoreCategory, number>>,
+  nextScores: Partial<Record<ScoreCategory, number>>
+) {
+  const previousBonus = calculateUpperBonus(calculateUpperSubtotal(previousScores));
+  const nextBonus = calculateUpperBonus(calculateUpperSubtotal(nextScores));
+
+  return Math.max(0, nextBonus - previousBonus);
+}
+
+async function mockFetchGameEvents(
+  roomId: string,
+  playerName: string,
+  rolledDice: DiceValue[],
+  nextPossibleScores: Partial<Record<ScoreCategory, number>>,
+  nextRollsLeft: number
+): Promise<GameEventItem[]> {
   await delay(120);
 
+  const bestScore = getBestPossibleScore(nextPossibleScores);
+  const bestScoreEvent = bestScore
+    ? {
+        id: `${roomId}-best`,
+        text: `${CATEGORY_NAMES[bestScore.category]} 当前可得 ${bestScore.score} 分，可以选择计分或继续重掷。`,
+        score: `+${bestScore.score}`,
+      }
+    : {
+        id: `${roomId}-best`,
+        text: '当前没有更高的组合项，可以考虑保留骰子后继续重掷。',
+      };
+
   return [
-    { id: `${roomId}-roll`, text: `${playerName} 完成了一次投骰，后端已收到 5 颗骰子的点数。`, score: '+0' },
-    { id: `${roomId}-lock`, text: '锁定状态已同步，未锁定骰子可继续重掷。' },
-    { id: `${roomId}-score`, text: '请选择一个空计分格，系统会计算并提交本回合得分。' },
+    { id: `${roomId}-roll`, text: `${playerName} 掷出了 ${formatDiceValues(rolledDice)}。`, score: `剩余 ${nextRollsLeft} 次` },
+    bestScoreEvent,
+    { id: `${roomId}-lock`, text: '已保留的骰子本回合会固定，其余骰子可继续重掷。' },
     { id: `${roomId}-tip`, text: '小顺子需要连续 4 个点数，大顺子需要连续 5 个点数。' },
   ];
 }
@@ -259,7 +313,7 @@ export default function GamePage() {
     () => [
       { id: 'game-system-start', type: 'system', author: '系统消息', text: `房间 ${roomId} 对局已开始。` },
       { id: 'game-player-hello', type: 'player', author: currentPlayerName, avatar: player?.avatar, text: '大家好运~' },
-      { id: 'game-system-sync', type: 'system', author: '系统消息', text: '系统会同步投骰和计分事件。' },
+      { id: 'game-system-tip', type: 'system', author: '系统消息', text: '投骰后请选择一个计分项完成本回合。' },
     ],
     [currentPlayerName, player?.avatar, roomId]
   );
@@ -308,6 +362,74 @@ export default function GamePage() {
     ];
   }, [currentPlayerId, currentPlayerName, currentRoom, isRoomGame, mode, playerScores]);
 
+  const currentUpperScore = calculateUpperSubtotal(playerScores);
+  const currentUpperBonus = calculateUpperBonus(currentUpperScore);
+  const currentLowerScore = calculateLowerTotal(playerScores);
+  const currentTotalScore = calculateGrandTotal(playerScores);
+
+  const gameResultData = useMemo<GameResultData>(() => {
+    const resultPlayers = players.map((item, index) => ({
+      id: index + 1,
+      nickname: item.name,
+      avatar: '',
+      score: item.id === currentPlayerId ? currentTotalScore : item.score,
+      isOwner: item.id === currentPlayerId,
+      rank: 0,
+    }));
+
+    const rankedPlayers = [...resultPlayers]
+      .sort((first, second) => second.score - first.score)
+      .map((item, index) => ({ ...item, rank: index + 1 }));
+
+    const currentDetail = {
+      upperScore: currentUpperScore,
+      bonusScore: currentUpperBonus,
+      upperTotal: currentUpperScore + currentUpperBonus,
+      lowerScore: currentLowerScore,
+      extraReward: 0,
+      extraBonus: currentUpperBonus,
+      totalScore: currentTotalScore,
+    };
+
+    const playerDetails = Object.fromEntries(
+      rankedPlayers.map(item => [
+        item.id,
+        item.isOwner
+          ? currentDetail
+          : {
+              upperScore: 0,
+              bonusScore: 0,
+              upperTotal: 0,
+              lowerScore: item.score,
+              extraReward: 0,
+              extraBonus: 0,
+              totalScore: item.score,
+            },
+      ])
+    );
+
+    const bestRoundScore = Math.max(0, ...Object.values(playerScores).filter((value): value is number => typeof value === 'number'));
+
+    return {
+      players: rankedPlayers,
+      playerDetails,
+      highlights: [
+        { id: 'yacht', icon: 'yacht', name: '快艇', value: playerScores.yacht === 50 ? 1 : 0, unit: '次' },
+        { id: 'straight', icon: 'straight', name: '大顺子', value: (playerScores.largeStraight ?? 0) > 0 ? 1 : 0, unit: '次' },
+        { id: 'four-kind', icon: 'fourKind', name: '四条', value: (playerScores.fourOfAKind ?? 0) > 0 ? 1 : 0, unit: '次' },
+        { id: 'best-round', icon: 'bestRound', name: '最高单项', value: bestRoundScore, unit: '分' },
+      ],
+    };
+  }, [
+    currentLowerScore,
+    currentPlayerId,
+    currentTotalScore,
+    currentUpperBonus,
+    currentUpperScore,
+    playerScores,
+    players,
+  ]);
+
   const scoreColumns = players.length.toString();
   const scoreTableStyle = { '--score-columns': scoreColumns } as CSSProperties;
 
@@ -322,6 +444,13 @@ export default function GamePage() {
 
     const nextLocked = locked.map((value, valueIndex) => (valueIndex === index ? !value : value));
     setLocked(nextLocked);
+    setGameEvents(prev => [
+      {
+        id: `lock-${index}-${Date.now()}`,
+        text: `${currentPlayerName} ${nextLocked[index] ? '保留' : '取消保留'}第 ${index + 1} 颗骰子（${dice[index]}点）。`,
+      },
+      ...prev,
+    ]);
     await mockSyncLockedDice({ roomId, playerId: currentPlayerId, dice, locked: nextLocked });
   };
 
@@ -334,11 +463,12 @@ export default function GamePage() {
     try {
       const nextDice = await mockRollDice({ roomId, playerId: currentPlayerId, dice, locked });
       const nextRollsLeft = rollsLeft - 1;
+      const nextPossibleScores = getPossibleScores(nextDice, completedCategories);
 
       setDice(nextDice);
       setRollsLeft(nextRollsLeft);
-      setPossibleScores(getPossibleScores(nextDice, completedCategories));
-      setGameEvents(await mockFetchGameEvents(roomId, currentPlayerName));
+      setPossibleScores(nextPossibleScores);
+      setGameEvents(await mockFetchGameEvents(roomId, currentPlayerName, nextDice, nextPossibleScores, nextRollsLeft));
     } finally {
       rollingGuardRef.current = false;
       setIsRolling(false);
@@ -356,16 +486,47 @@ export default function GamePage() {
       locked,
     });
 
-    setCompletedCategories(prev => [...prev, category]);
-    setPlayerScores(prev => ({ ...prev, [category]: score }));
+    const nextCompletedCategories = [...completedCategories, category];
+    const nextPlayerScores = { ...playerScores, [category]: score };
+    const upperBonusAward = getUpperBonusAward(playerScores, nextPlayerScores);
+    const isGameComplete = nextCompletedCategories.length >= SCORE_CATEGORIES.length;
+    const scoreEvents: GameEventItem[] = [
+      {
+        id: `${category}-${Date.now()}`,
+        text: `${currentPlayerName} 选择「${CATEGORY_NAMES[category]}」计分，本项获得 ${score} 分。`,
+        score: `+${score}`,
+      },
+    ];
+
+    if (upperBonusAward > 0) {
+      scoreEvents.push({
+        id: `upper-bonus-${Date.now()}`,
+        text: `${currentPlayerName} 上层数字区达到 63 分，触发达标奖励。`,
+        score: `+${upperBonusAward}`,
+      });
+    }
+
+    if (isGameComplete) {
+      scoreEvents.push({
+        id: `game-complete-${Date.now()}`,
+        text: '所有计分项已填写，本局进入结算。',
+        score: `${calculateGrandTotal(nextPlayerScores)}分`,
+      });
+    }
+
+    setCompletedCategories(nextCompletedCategories);
+    setPlayerScores(nextPlayerScores);
     setPossibleScores({});
     setRollsLeft(MAX_ROLLS_PER_TURN);
     setDice(initialDice);
     setLocked(initialLocked);
-    setGameEvents(prev => [
-      { id: `${category}-${Date.now()}`, text: `${currentPlayerName} 选择了 ${CATEGORY_NAMES[category]} 计分。`, score: `+${score}` },
-      ...prev,
-    ]);
+    setGameEvents(prev => [...scoreEvents, ...prev]);
+
+    if (isGameComplete) {
+      window.setTimeout(() => {
+        setIsResultOpen(true);
+      }, 420);
+    }
   };
 
   return (
@@ -477,7 +638,9 @@ export default function GamePage() {
               const category = row.category;
               const score = playerScores[category];
               const possibleScore = possibleScores[category];
-              const disabled = completedCategories.includes(category) || rollsLeft === MAX_ROLLS_PER_TURN;
+              const isCompleted = completedCategories.includes(category);
+              const hasPossibleScore = possibleScore !== undefined;
+              const disabled = isCompleted || rollsLeft === MAX_ROLLS_PER_TURN;
 
               return (
                 <button
@@ -498,7 +661,12 @@ export default function GamePage() {
                     <small>（{getCategoryHint(category)}）</small>
                   </div>
                   {players.map((item, playerIndex) => (
-                    <span key={item.id} className={styles.scoreValue}>
+                    <span
+                      key={item.id}
+                      className={`${styles.scoreValue} ${
+                        playerIndex === 0 && isCompleted ? styles.scoreValueFilled : ''
+                      } ${playerIndex === 0 && !isCompleted && hasPossibleScore ? styles.scoreValuePossible : ''}`}
+                    >
                       {playerIndex === 0 ? score ?? possibleScore ?? '-' : '-'}
                     </span>
                   ))}
@@ -536,6 +704,7 @@ export default function GamePage() {
 
       <GameResultModal
         open={isResultOpen}
+        result={gameResultData}
         onClose={() => setIsResultOpen(false)}
         onBackLobby={() => router.push('/')}
         onReplay={() => setIsResultOpen(false)}

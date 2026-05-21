@@ -231,7 +231,9 @@ export default function HomePage() {
 
         <div className={styles.headerNotice}>
           <Volume2 size={19} fill="currentColor" />
-          <span>恭喜 幸运星 在高级宝箱中获得 传说骰子</span>
+          <span className={styles.noticeViewport}>
+            <span className={styles.noticeMarqueeText}>欢迎来到投骰乐园！</span>
+          </span>
         </div>
 
         <section className={styles.headerTools} aria-label="顶部工具栏">

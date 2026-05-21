@@ -4,25 +4,17 @@ import { useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowLeft, Castle, Dice5, Gamepad2, Gem, Gift, Medal, Target, Trophy, User } from 'lucide-react';
+import { ArrowLeft, Dice5, Gem, Target, Trophy } from 'lucide-react';
 import board1Background from '@/assets/images/ui/panels/leaderboard-card-1.png';
 import board2Background from '@/assets/images/ui/panels/leaderboard-card-2.png';
 import board3Background from '@/assets/images/ui/panels/leaderboard-card-3.png';
 import board4Background from '@/assets/images/ui/panels/leaderboard-card-4.png';
 import leaderboardBackground from '@/assets/images/backgrounds/leaderboard/leaderboard-bg.png';
-import { ResponsiveStage } from '@/components/layout';
+import { IslandTopNav, ResponsiveStage } from '@/components/layout';
 import { StarIcon } from '@/components/ui';
 import { usePlayerStore } from '@/stores';
 
 type LeaderboardType = 'highestScore' | 'totalGames' | 'totalWins' | 'winRate';
-
-interface NavigationItem {
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  iconColor: string;
-  active?: boolean;
-}
 
 interface LeaderboardMenuItem {
   type: LeaderboardType;
@@ -62,13 +54,6 @@ interface LeaderboardBoard {
 interface LeaderboardApiResponse {
   boards: Record<LeaderboardType, LeaderboardBoard>;
 }
-
-const navigationItems: NavigationItem[] = [
-  { label: '游戏大厅', href: '/', icon: Gamepad2, iconColor: 'text-[#dff6ff]' },
-  { label: '排行榜', href: '/leaderboard', icon: Medal, iconColor: 'text-[#ffffff]', active: true },
-  { label: '活动', href: '/activity', icon: Gift, iconColor: 'text-[#ffe070]' },
-  { label: '个人中心', href: '/profile', icon: User, iconColor: 'text-[#dbe8ff]' },
-];
 
 const leaderboardMenus: LeaderboardMenuItem[] = [
   {
@@ -246,20 +231,6 @@ const leaderboardBackdropClass =
 const leaderboardTableSurfaceClass =
   'bg-[linear-gradient(180deg,#f7fbff_0%,#edf6ff_48%,#e9f3ff_100%)]';
 
-function DiceLogo() {
-  return (
-    <Link href="/" aria-label="返回投骰乐园首页" className="flex items-center gap-3 text-white no-underline">
-      <span className="grid h-[58px] w-[58px] place-items-center rounded-[16px] border-2 border-white/80 bg-gradient-to-br from-white to-[#9ed5ff] text-[36px] text-[#0a64c8] shadow-[0_10px_22px_rgba(0,20,60,0.28),inset_0_3px_8px_rgba(255,255,255,0.7)]">
-        🎲
-      </span>
-      <strong className="text-[32px] font-black leading-[0.92] tracking-[0] text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.45)]">
-        投骰乐园
-        <small className="mt-2 block text-[15px] font-black tracking-[2px]">DICE PARADISE</small>
-      </strong>
-    </Link>
-  );
-}
-
 function AvatarBubble({ avatar, tone, size = 'large' }: { avatar: string; tone: string; size?: 'large' | 'small' }) {
   const sizeClass = size === 'large' ? 'h-[58px] w-[58px] text-[31px]' : 'h-[46px] w-[46px] text-[25px]';
 
@@ -334,12 +305,12 @@ function StatCardView({
       style={{ backgroundImage: `url(${card.backgroundImage})` }}
     >
       <span className="absolute inset-0 bg-gradient-to-r from-black/0 via-black/0 to-black/16" />
-      <span className="absolute left-[138px] top-[44px] whitespace-pre-line text-[27px] font-black leading-[1.28] text-[#161c35] drop-shadow-[0_2px_0_rgba(255,255,255,0.4)]">
+      <span className="absolute left-[124px] top-[44px] whitespace-pre-line text-[27px] font-black leading-[1.28] text-[#161c35] drop-shadow-[0_2px_0_rgba(255,255,255,0.4)]">
         {card.title}
       </span>
       <GemValue
         value={card.value}
-        className="absolute bottom-[30px] left-[174px] rounded-full bg-black/22 px-4 py-2 text-[21px] font-black text-white shadow-[inset_0_1px_5px_rgba(255,255,255,0.18)]"
+        className="absolute bottom-[30px] left-[148px] rounded-full bg-black/22 px-4 py-2 text-[21px] font-black text-white shadow-[inset_0_1px_5px_rgba(255,255,255,0.18)]"
       />
     </button>
   );
@@ -491,31 +462,10 @@ export default function LeaderboardPage() {
         <div className={`absolute inset-0 ${leaderboardBackdropClass}`} />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_76%_30%,rgba(87,184,255,0.16),transparent_34%),linear-gradient(180deg,rgba(18,112,255,0.10)_0%,rgba(3,21,126,0.24)_100%)]" />
 
-        <header className="absolute left-0 top-0 z-20 flex h-[86px] w-full items-center justify-between bg-gradient-to-r from-[#041877] via-[#062caf] to-[#041877] px-[40px] shadow-[0_12px_28px_rgba(0,16,92,0.26)]">
-          <DiceLogo />
-
-          <nav className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-[46px]">
-            {navigationItems.map(item => {
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`flex h-[48px] items-center gap-3 rounded-full px-7 text-[21px] font-black transition-all duration-300 hover:-translate-y-[3px] ${
-                    item.active
-                      ? 'border border-white/42 bg-gradient-to-r from-[#3a86ff] to-[#155bff] text-white shadow-[0_10px_22px_rgba(32,108,255,0.42),inset_0_2px_8px_rgba(255,255,255,0.35)]'
-                      : 'text-white/94 hover:bg-white/12 hover:shadow-[0_12px_24px_rgba(42,128,255,0.28)]'
-                  }`}
-                >
-                  <Icon className={item.iconColor} size={26} strokeWidth={2.8} fill={item.active ? 'rgba(255,255,255,0.18)' : 'transparent'} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="flex items-center gap-8">
+        <IslandTopNav
+          activeItem="leaderboard"
+          rightSlot={
+            <div className="flex items-center gap-8">
             <div className="flex h-[50px] items-center gap-3 rounded-full border border-white/25 bg-[#07156a]/48 pl-2 pr-5 shadow-[inset_0_2px_8px_rgba(255,255,255,0.18)] backdrop-blur">
               <span className="grid h-[44px] w-[44px] place-items-center rounded-full bg-gradient-to-b from-[#fff28b] to-[#ff9b1f] shadow-[0_6px_12px_rgba(128,70,0,0.28)]">
                 <StarIcon size={36} />
@@ -533,8 +483,9 @@ export default function LeaderboardPage() {
               <AvatarBubble avatar="🎲" tone="from-[#e8f7ff] to-[#56a7ff]" size="small" />
               <strong className="text-[22px] font-black">{playerName}</strong>
             </button>
-          </div>
-        </header>
+            </div>
+          }
+        />
 
         {isAuthPromptOpen && (
           <div
