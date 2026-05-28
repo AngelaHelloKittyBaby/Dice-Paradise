@@ -9,6 +9,7 @@ export interface RoomMember {
   isHost: boolean;
   isReady: boolean;
   joinedAt: string;
+  points: number;
 }
 
 /** 房间配置 */

@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, type KeyboardEvent } from 'react';
+import Image, { type StaticImageData } from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowLeft, Dice5, Gem, Target, Trophy } from 'lucide-react';
+import { ArrowLeft, Gem, Target, Trophy } from 'lucide-react';
 import board1Background from '@/assets/images/ui/panels/leaderboard-card-1.png';
 import board2Background from '@/assets/images/ui/panels/leaderboard-card-2.png';
 import board3Background from '@/assets/images/ui/panels/leaderboard-card-3.png';
 import board4Background from '@/assets/images/ui/panels/leaderboard-card-4.png';
+import diceIconImage from '@/assets/images/ui/icons/骰子.png';
 import leaderboardBackground from '@/assets/images/backgrounds/leaderboard/leaderboard-bg.png';
 import { IslandTopNav, ResponsiveStage } from '@/components/layout';
 import { StarIcon } from '@/components/ui';
@@ -19,7 +21,9 @@ type LeaderboardType = 'highestScore' | 'totalGames' | 'totalWins' | 'winRate';
 interface LeaderboardMenuItem {
   type: LeaderboardType;
   label: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  imageIcon?: StaticImageData;
+  imageIconClassName?: string;
   activeIconColor: string;
   iconColor: string;
 }
@@ -66,7 +70,8 @@ const leaderboardMenus: LeaderboardMenuItem[] = [
   {
     type: 'totalGames',
     label: '总对局数排行榜',
-    icon: Dice5,
+    imageIcon: diceIconImage,
+    imageIconClassName: 'h-[50px] w-[50px] -ml-2 -mr-1 scale-125 object-contain',
     activeIconColor: 'text-[#256bff]',
     iconColor: 'text-[#70c6ff]',
   },
@@ -305,7 +310,7 @@ function StatCardView({
       style={{ backgroundImage: `url(${card.backgroundImage})` }}
     >
       <span className="absolute inset-0 bg-gradient-to-r from-black/0 via-black/0 to-black/16" />
-      <span className="absolute left-[124px] top-[44px] whitespace-pre-line text-[27px] font-black leading-[1.28] text-[#161c35] drop-shadow-[0_2px_0_rgba(255,255,255,0.4)]">
+      <span className="absolute left-[142px] top-[34px] whitespace-pre-line text-[27px] font-black leading-[1.28] text-[#161c35] drop-shadow-[0_2px_0_rgba(255,255,255,0.4)]">
         {card.title}
       </span>
       <GemValue
@@ -341,12 +346,27 @@ function MenuItemView({
       {active && (
         <span className="absolute -right-5 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[18px] border-l-[20px] border-y-transparent border-l-[#ffcb45]" />
       )}
-      <Icon
-        size={38}
-        strokeWidth={2.8}
-        className={active ? item.activeIconColor : `${item.iconColor} drop-shadow-[0_5px_8px_rgba(0,36,120,0.3)]`}
-        fill={active ? 'rgba(255, 176, 33, 0.38)' : 'transparent'}
-      />
+      {item.imageIcon ? (
+        <Image
+          src={item.imageIcon}
+          alt=""
+          width={64}
+          height={64}
+          className={`${item.imageIconClassName ?? 'h-[42px] w-[42px] object-contain'} drop-shadow-[0_8px_10px_rgba(0,36,120,0.34)] ${
+            active ? 'brightness-110 saturate-110' : ''
+          }`}
+          sizes="64px"
+        />
+      ) : (
+        Icon && (
+          <Icon
+            size={38}
+            strokeWidth={2.8}
+            className={active ? item.activeIconColor : `${item.iconColor} drop-shadow-[0_5px_8px_rgba(0,36,120,0.3)]`}
+            fill={active ? 'rgba(255, 176, 33, 0.38)' : 'transparent'}
+          />
+        )
+      )}
       <span>{item.label}</span>
     </button>
   );
@@ -543,7 +563,7 @@ export default function LeaderboardPage() {
 
         <aside
           data-leaderboard-sidebar="true"
-          className={`absolute left-[52px] top-[202px] z-10 h-[480px] w-[315px] rounded-[18px] border-x border-t border-[#56b8ff]/70 bg-gradient-to-b from-[#126dff] via-[#0b4cdb] to-[#07218d] p-3 shadow-[0_22px_44px_rgba(0,30,112,0.36),inset_0_2px_12px_rgba(255,255,255,0.18)] ${hoverLift}`}
+          className={`absolute left-[52px] top-[202px] z-10 h-[480px] w-[315px] rounded-t-[18px] border-x border-t border-[#56b8ff]/70 bg-[linear-gradient(180deg,rgba(18,109,255,0.96)_0%,rgba(11,76,219,0.72)_44%,rgba(7,33,141,0.28)_74%,rgba(7,33,141,0)_100%)] p-3 shadow-[0_18px_38px_rgba(0,30,112,0.28),inset_0_2px_12px_rgba(255,255,255,0.18)] ${hoverLift}`}
         >
           <div className="grid gap-3">
             {leaderboardMenus.map(item => (

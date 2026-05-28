@@ -2,128 +2,66 @@
 
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Dice5, LockKeyhole, Phone, ShieldCheck, UserRound } from 'lucide-react';
-import { mockCurrentPlayer } from '@/mocks';
+import { LockKeyhole, UserRound } from 'lucide-react';
 import loginBackground from '@/assets/images/backgrounds/login/login-bg.png';
-import { usePlayerStore } from '@/stores';
+import diceIcon from '@/assets/images/ui/icons/骰子.png';
+import { useAuth } from '@/hooks';
 import styles from './login.module.scss';
 
 type AuthTab = 'login' | 'register';
 
+interface LoginPageProps {
+  searchParams?: {
+    mode?: string;
+  };
+}
+
 interface LoginFormState {
-  account: string;
+  nickname: string;
   password: string;
   rememberPassword: boolean;
 }
 
 interface RegisterFormState {
-  username: string;
-  phone: string;
-  code: string;
+  nickname: string;
   password: string;
   confirmPassword: string;
   acceptedAgreement: boolean;
 }
 
-interface LoginRequest {
-  account: string;
-  password: string;
-}
-
-interface RegisterRequest {
-  username: string;
-  phone: string;
-  code: string;
-  password: string;
-}
-
-interface SendCodeRequest {
-  phone: string;
-}
-
-interface MockApiResponse {
-  success: true;
-  message: string;
-}
-
-const MOCK_ENDPOINTS = {
-  login: '/api/login',
-  register: '/api/register',
-  sendCode: '/api/send-code',
-} as const;
-
 const initialLoginForm: LoginFormState = {
-  account: '',
+  nickname: '',
   password: '',
   rememberPassword: true,
 };
 
 const initialRegisterForm: RegisterFormState = {
-  username: '',
-  phone: '',
-  code: '',
+  nickname: '',
   password: '',
   confirmPassword: '',
   acceptedAgreement: false,
 };
 
-function wait(ms = 640): Promise<void> {
-  return new Promise(resolve => {
-    window.setTimeout(resolve, ms);
-  });
+function getInitialAuthTab(mode?: string): AuthTab {
+  return mode === 'login' ? 'login' : 'register';
 }
 
-async function mockLogin(payload: LoginRequest): Promise<MockApiResponse> {
-  console.info('POST', MOCK_ENDPOINTS.login, payload);
-  await wait();
-
-  return {
-    success: true,
-    message: '登录成功',
-  };
-}
-
-async function mockRegister(payload: RegisterRequest): Promise<MockApiResponse> {
-  console.info('POST', MOCK_ENDPOINTS.register, payload);
-  await wait();
-
-  return {
-    success: true,
-    message: '注册成功，请登录',
-  };
-}
-
-async function mockSendCode(payload: SendCodeRequest): Promise<MockApiResponse> {
-  console.info('POST', MOCK_ENDPOINTS.sendCode, payload);
-  await wait(420);
-
-  return {
-    success: true,
-    message: '验证码已发送',
-  };
-}
-
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: LoginPageProps) {
   const router = useRouter();
-  const loginPlayer = usePlayerStore(state => state.login);
-  const [activeTab, setActiveTab] = useState<AuthTab>('register');
+  const { login, register } = useAuth();
+  const initialAuthTab = getInitialAuthTab(searchParams?.mode);
+  const [activeTab, setActiveTab] = useState<AuthTab>(initialAuthTab);
   const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginForm);
   const [registerForm, setRegisterForm] = useState<RegisterFormState>(initialRegisterForm);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSendingCode, setIsSendingCode] = useState(false);
 
   useEffect(() => {
-    if (window.location.search.includes('mode=login')) {
-      setActiveTab('login');
-    }
-
-    if (window.location.search.includes('mode=register')) {
-      setActiveTab('register');
-    }
-  }, []);
+    setActiveTab(initialAuthTab);
+  }, [initialAuthTab]);
 
   const switchTab = (tab: AuthTab) => {
     setActiveTab(tab);
@@ -152,15 +90,13 @@ export default function LoginPage() {
   };
 
   const validateLogin = () => {
-    if (!loginForm.account.trim()) return '请输入用户名或手机号';
+    if (!loginForm.nickname.trim()) return '请输入用户昵称';
     if (!loginForm.password.trim()) return '请输入密码';
     return '';
   };
 
   const validateRegister = () => {
-    if (!registerForm.username.trim()) return '请输入用户名';
-    if (!registerForm.phone.trim()) return '请输入手机号';
-    if (!registerForm.code.trim()) return '请输入验证码';
+    if (!registerForm.nickname.trim()) return '请输入用户昵称';
     if (!registerForm.password.trim()) return '请输入密码';
     if (!registerForm.confirmPassword.trim()) return '请再次输入密码';
     if (registerForm.password !== registerForm.confirmPassword) return '两次输入的密码不一致';
@@ -182,16 +118,11 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await mockLogin({
-        account: loginForm.account.trim(),
-        password: loginForm.password,
-      });
-
-      loginPlayer(mockCurrentPlayer);
-      setSuccessMessage(response.message);
+      await login(loginForm.nickname.trim(), loginForm.password);
+      setSuccessMessage('登录成功');
       router.push('/');
-    } catch {
-      setErrorMessage('登录失败，请稍后重试');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '登录失败，请稍后重试');
     } finally {
       setIsSubmitting(false);
     }
@@ -211,43 +142,14 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await mockRegister({
-        username: registerForm.username.trim(),
-        phone: registerForm.phone.trim(),
-        code: registerForm.code.trim(),
-        password: registerForm.password,
-      });
-
-      setSuccessMessage(response.message);
+      await register(registerForm.nickname.trim(), registerForm.password);
+      setSuccessMessage('注册成功');
       setRegisterForm(initialRegisterForm);
-      setActiveTab('login');
-    } catch {
-      setErrorMessage('注册失败，请稍后重试');
+      router.push('/');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '注册失败，请稍后重试');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleSendCode = async () => {
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    if (!registerForm.phone.trim()) {
-      setErrorMessage('请输入手机号后再获取验证码');
-      return;
-    }
-
-    setIsSendingCode(true);
-
-    try {
-      const response = await mockSendCode({
-        phone: registerForm.phone.trim(),
-      });
-      setSuccessMessage(response.message);
-    } catch {
-      setErrorMessage('验证码发送失败，请稍后重试');
-    } finally {
-      setIsSendingCode(false);
     }
   };
 
@@ -260,7 +162,7 @@ export default function LoginPage() {
       >
         <div className={styles.brandMark} aria-label="投骰乐园">
           <span className={styles.logoDice}>
-            <Dice5 size={46} strokeWidth={2.6} />
+            <Image src={diceIcon} alt="" width={50} height={50} priority />
           </span>
           <span>
             投骰乐园
@@ -281,7 +183,12 @@ export default function LoginPage() {
           </div>
         </aside>
 
-        <section className={styles.authCard} aria-label="登录注册表单">
+        <section
+          className={`${styles.authCard} ${
+            activeTab === 'login' ? styles.authCardLogin : styles.authCardRegister
+          }`}
+          aria-label="登录注册表单"
+        >
           <div className={styles.tabs} role="tablist" aria-label="账号操作">
             <span
               className={`${styles.tabIndicator} ${
@@ -314,49 +221,16 @@ export default function LoginPage() {
                 <label className={styles.fieldRow}>
                   <span>
                     <UserRound size={24} />
-                    用户名
+                    用户昵称
                   </span>
                   <input
                     type="text"
-                    value={registerForm.username}
-                    onChange={event => updateRegisterForm('username', event.target.value)}
-                    placeholder="请输入用户名"
+                    value={registerForm.nickname}
+                    onChange={event => updateRegisterForm('nickname', event.target.value)}
+                    placeholder="请输入用户昵称"
                     autoComplete="username"
                   />
-                  <small>4-16位字符，可使用字母、数字、下划线</small>
-                </label>
-
-                <label className={styles.fieldRow}>
-                  <span>
-                    <Phone size={24} />
-                    手机号
-                  </span>
-                  <div className={styles.codeInputGroup}>
-                    <input
-                      type="tel"
-                      value={registerForm.phone}
-                      onChange={event => updateRegisterForm('phone', event.target.value)}
-                      placeholder="请输入手机号"
-                      autoComplete="tel"
-                    />
-                    <button type="button" onClick={handleSendCode} disabled={isSendingCode}>
-                      {isSendingCode ? '发送中' : '获取验证码'}
-                    </button>
-                  </div>
-                </label>
-
-                <label className={styles.fieldRow}>
-                  <span>
-                    <ShieldCheck size={24} />
-                    验证码
-                  </span>
-                  <input
-                    type="text"
-                    value={registerForm.code}
-                    onChange={event => updateRegisterForm('code', event.target.value)}
-                    placeholder="请输入验证码"
-                    inputMode="numeric"
-                  />
+                  <small>昵称唯一，后续将用于登录</small>
                 </label>
 
                 <label className={styles.fieldRow}>
@@ -407,9 +281,9 @@ export default function LoginPage() {
                 )}
 
                 <button className={styles.primaryButton} type="submit" disabled={isSubmitting}>
-                  <Dice5 size={30} />
+                  <Image className={styles.primaryDiceIcon} src={diceIcon} alt="" width={36} height={36} />
                   {isSubmitting ? '注册中...' : '立即注册'}
-                  <Dice5 size={30} />
+                  <Image className={styles.primaryDiceIcon} src={diceIcon} alt="" width={36} height={36} />
                 </button>
 
                 <p className={styles.switchHint}>
@@ -424,13 +298,13 @@ export default function LoginPage() {
                 <label className={styles.fieldRow}>
                   <span>
                     <UserRound size={24} />
-                    用户名 / 手机号
+                    用户昵称
                   </span>
                   <input
                     type="text"
-                    value={loginForm.account}
-                    onChange={event => updateLoginForm('account', event.target.value)}
-                    placeholder="请输入用户名或手机号"
+                    value={loginForm.nickname}
+                    onChange={event => updateLoginForm('nickname', event.target.value)}
+                    placeholder="请输入用户昵称"
                     autoComplete="username"
                   />
                 </label>
@@ -468,9 +342,9 @@ export default function LoginPage() {
                 )}
 
                 <button className={styles.primaryButton} type="submit" disabled={isSubmitting}>
-                  <Dice5 size={30} />
+                  <Image className={styles.primaryDiceIcon} src={diceIcon} alt="" width={36} height={36} />
                   {isSubmitting ? '登录中...' : '立即登录'}
-                  <Dice5 size={30} />
+                  <Image className={styles.primaryDiceIcon} src={diceIcon} alt="" width={36} height={36} />
                 </button>
 
                 <p className={styles.switchHint}>

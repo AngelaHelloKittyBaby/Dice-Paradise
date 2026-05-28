@@ -1,17 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Player, PlayerSettings } from '@/types/player';
-import { mockCurrentPlayer, mockPlayerStats } from '@/mocks';
+import type { Player, PlayerSettings, PlayerStats } from '@/types/player';
 
 interface PlayerState {
   player: Player | null;
-  stats: typeof mockPlayerStats | null;
+  stats: PlayerStats | null;
   settings: PlayerSettings;
   isLoggedIn: boolean;
+  authToken: string | null;
+  tokenType: string | null;
 }
 
 interface PlayerActions {
-  login: (player: Player) => void;
+  login: (player: Player, session?: { authToken?: string; tokenType?: string; stats?: PlayerStats }) => void;
   logout: () => void;
   updatePlayer: (data: Partial<Player>) => void;
   updateSettings: (settings: Partial<PlayerSettings>) => void;
@@ -35,15 +36,23 @@ export const usePlayerStore = create<PlayerStore>()(
   persist(
     (set, get) => ({
       // State
-      player: mockCurrentPlayer,
-      stats: mockPlayerStats,
+      player: null,
+      stats: null,
       settings: defaultSettings,
-      isLoggedIn: true, // Mock: 默认已登录
+      isLoggedIn: false,
+      authToken: null,
+      tokenType: null,
 
       // Actions
-      login: (player) => set({ player, isLoggedIn: true }),
+      login: (player, session) => set((state) => ({
+        player,
+        stats: session?.stats ?? state.stats,
+        isLoggedIn: true,
+        authToken: session?.authToken ?? state.authToken,
+        tokenType: session?.tokenType ?? state.tokenType,
+      })),
 
-      logout: () => set({ player: null, stats: null, isLoggedIn: false }),
+      logout: () => set({ player: null, stats: null, isLoggedIn: false, authToken: null, tokenType: null }),
 
       updatePlayer: (data) => set((state) => ({
         player: state.player ? { ...state.player, ...data } : null,
@@ -93,6 +102,8 @@ export const usePlayerStore = create<PlayerStore>()(
         player: state.player,
         isLoggedIn: state.isLoggedIn,
         settings: state.settings,
+        authToken: state.authToken,
+        tokenType: state.tokenType,
       }),
     }
   )

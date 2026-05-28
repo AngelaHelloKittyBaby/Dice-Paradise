@@ -9,6 +9,7 @@ export const mockRoomMembers: RoomMember[] = [
     isHost: true,
     isReady: true,
     joinedAt: '2024-05-13T10:00:00Z',
+    points: 12600,
   },
   {
     playerId: 'player-002',
@@ -17,6 +18,7 @@ export const mockRoomMembers: RoomMember[] = [
     isHost: false,
     isReady: true,
     joinedAt: '2024-05-13T10:02:00Z',
+    points: 11240,
   },
   {
     playerId: 'player-003',
@@ -25,6 +27,7 @@ export const mockRoomMembers: RoomMember[] = [
     isHost: false,
     isReady: false,
     joinedAt: '2024-05-13T10:05:00Z',
+    points: 9880,
   },
 ];
 

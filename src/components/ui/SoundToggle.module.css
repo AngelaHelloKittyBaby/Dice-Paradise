@@ -1,0 +1,152 @@
+.soundToggleControl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 128px;
+  height: 58px;
+  padding: 0 14px;
+  border: 1px solid rgba(141, 219, 255, 0.46);
+  border-radius: 999px;
+  appearance: none;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(13, 57, 136, 0.72), rgba(4, 20, 62, 0.72));
+  color: #ffffff;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -8px 16px rgba(0, 16, 58, 0.18),
+    0 12px 24px rgba(0, 23, 78, 0.24);
+  cursor: pointer;
+  font-family: inherit;
+  backdrop-filter: blur(8px);
+  touch-action: manipulation;
+  transition: border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease, transform 180ms ease;
+}
+
+.soundToggleControl:hover {
+  border-color: rgba(255, 226, 113, 0.7);
+  filter: brightness(1.06);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -8px 16px rgba(0, 16, 58, 0.2),
+    0 16px 28px rgba(0, 24, 84, 0.3),
+    0 0 0 3px rgba(93, 206, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.soundToggleControl:focus-visible {
+  outline: 3px solid rgba(255, 225, 103, 0.45);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.soundIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 50%;
+  background-color: #ff99fd;
+  background-image:
+    radial-gradient(at 81% 39%, hsla(327, 79%, 79%, 1) 0, transparent 50%),
+    radial-gradient(at 11% 72%, hsla(264, 64%, 79%, 1) 0, transparent 50%),
+    radial-gradient(at 23% 20%, hsla(75, 98%, 71%, 1) 0, transparent 50%);
+  color: #ffffff;
+  box-shadow:
+    inset 0 -9px 10px rgba(0, 0, 0, 0.16),
+    inset 0 4px 8px rgba(255, 255, 255, 0.24),
+    0 7px 14px rgba(0, 23, 78, 0.24),
+    0 0 18px rgba(255, 153, 253, 0.3);
+  transition: background 0.4s ease, color 0.4s ease, filter 0.4s ease, transform 0.4s ease;
+}
+
+.soundIcon svg {
+  filter: drop-shadow(0 2px 3px rgba(32, 24, 98, 0.28));
+}
+
+.soundToggleControl[data-sound-on='false'] .soundIcon {
+  background: linear-gradient(180deg, #243446, #101923);
+  color: #8db0ca;
+  box-shadow:
+    inset 0 -9px 10px rgba(0, 0, 0, 0.24),
+    inset 0 4px 8px rgba(255, 255, 255, 0.08),
+    0 7px 14px rgba(0, 23, 78, 0.18);
+  filter: saturate(0.72);
+}
+
+.soundToggleControl:hover .soundIcon {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.switchShell {
+  position: relative;
+  display: inline-block;
+  width: 3.5em;
+  height: 2em;
+  flex: 0 0 auto;
+  font-size: 17px;
+  perspective: 500px;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.switchShell::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  border-radius: 50px;
+  background-color: #d8ff99;
+  background-image:
+    radial-gradient(at 21% 46%, hsla(183, 65%, 60%, 1) 0, transparent 50%),
+    radial-gradient(at 23% 25%, hsla(359, 74%, 70%, 1) 0, transparent 50%),
+    radial-gradient(at 20% 1%, hsla(267, 83%, 75%, 1) 0, transparent 50%),
+    radial-gradient(at 86% 87%, hsla(204, 69%, 68%, 1) 0, transparent 50%),
+    radial-gradient(at 99% 41%, hsla(171, 72%, 77%, 1) 0, transparent 50%),
+    radial-gradient(at 55% 24%, hsla(138, 60%, 62%, 1) 0, transparent 50%);
+  content: '';
+  filter: blur(20px);
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 30px;
+  background-color: #fdfefedc;
+  pointer-events: none;
+  transition: 0.4s;
+}
+
+.slider::before {
+  position: absolute;
+  left: 0.3em;
+  bottom: 0.35em;
+  width: 1.4em;
+  height: 1.4em;
+  border-radius: 50%;
+  background-color: #ff99fd;
+  background-image:
+    radial-gradient(at 81% 39%, hsla(327, 79%, 79%, 1) 0, transparent 50%),
+    radial-gradient(at 11% 72%, hsla(264, 64%, 79%, 1) 0, transparent 50%),
+    radial-gradient(at 23% 20%, hsla(75, 98%, 71%, 1) 0, transparent 50%);
+  box-shadow:
+    rgba(0, 0, 0, 0.17) 0 -10px 10px 0 inset,
+    rgba(0, 0, 0, 0.09) 0 -1px 15px -8px;
+  content: '';
+  transition: 0.4s;
+}
+
+.soundToggleControl[data-switch-active='true'] .slider {
+  background-color: #17202a;
+}
+
+.soundToggleControl[data-switch-active='true'] .slider::before {
+  transform: translateX(1.5em);
+}
+
+

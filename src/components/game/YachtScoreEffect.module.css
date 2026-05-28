@@ -1,0 +1,158 @@
+.effectLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.route {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 620px;
+  height: 360px;
+  pointer-events: none;
+  transform-origin: 50% 72%;
+  will-change: transform, opacity, filter;
+}
+
+.route::after {
+  position: absolute;
+  left: -190px;
+  top: 116px;
+  z-index: 1;
+  width: 440px;
+  height: 66px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(120, 226, 255, 0), rgba(156, 229, 255, 0.32), rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0));
+  content: '';
+  filter: blur(16px);
+  opacity: 0.72;
+  transform: rotate(5deg);
+}
+
+.yachtFloat {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  width: 620px;
+  height: 360px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.yachtImage {
+  display: block;
+  width: 620px;
+  height: auto;
+  user-select: none;
+  filter:
+    drop-shadow(0 22px 26px rgba(0, 17, 61, 0.34))
+    drop-shadow(0 0 18px rgba(146, 223, 255, 0.24));
+}
+
+.wakeGroup {
+  position: absolute;
+  left: -410px;
+  top: 46px;
+  z-index: 2;
+  width: 820px;
+  height: 350px;
+  pointer-events: none;
+  transform-origin: 86% 52%;
+  will-change: transform, opacity;
+}
+
+.trailMist {
+  position: absolute;
+  left: 72px;
+  top: 92px;
+  width: 640px;
+  height: 130px;
+  border-radius: 999px;
+  background:
+    radial-gradient(ellipse at 72% 44%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.24) 34%, transparent 68%),
+    linear-gradient(90deg, rgba(64, 197, 255, 0), rgba(90, 206, 255, 0.32), rgba(255, 255, 255, 0.6));
+  filter: blur(18px);
+  opacity: 0.82;
+  transform: rotate(1deg);
+}
+
+.waveImage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 760px;
+  height: auto;
+  opacity: 0.82;
+  filter: blur(1.6px) brightness(1.35) saturate(1.28);
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 76%, transparent 100%);
+  user-select: none;
+}
+
+.sparkleField {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.sparkleField span {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0 20%, #fff5a8 32%, rgba(82, 213, 255, 0.88) 56%, transparent 72%);
+  box-shadow: 0 0 14px rgba(255, 237, 135, 0.78), 0 0 22px rgba(78, 208, 255, 0.38);
+  opacity: 0;
+  animation: wakeSparkle 980ms ease-out both;
+}
+
+.sparkleField span:nth-child(1) { left: 15%; top: 55%; animation-delay: 90ms; }
+.sparkleField span:nth-child(2) { left: 21%; top: 49%; animation-delay: 180ms; }
+.sparkleField span:nth-child(3) { left: 28%; top: 62%; animation-delay: 240ms; }
+.sparkleField span:nth-child(4) { left: 36%; top: 44%; animation-delay: 310ms; }
+.sparkleField span:nth-child(5) { left: 43%; top: 57%; animation-delay: 390ms; }
+.sparkleField span:nth-child(6) { left: 49%; top: 48%; animation-delay: 460ms; }
+.sparkleField span:nth-child(7) { left: 56%; top: 66%; animation-delay: 530ms; }
+.sparkleField span:nth-child(8) { left: 62%; top: 50%; animation-delay: 600ms; }
+.sparkleField span:nth-child(9) { left: 70%; top: 58%; animation-delay: 680ms; }
+.sparkleField span:nth-child(10) { left: 77%; top: 46%; animation-delay: 760ms; }
+.sparkleField span:nth-child(11) { left: 83%; top: 63%; animation-delay: 840ms; }
+.sparkleField span:nth-child(12) { left: 31%; top: 38%; animation-delay: 420ms; }
+.sparkleField span:nth-child(13) { left: 52%; top: 36%; animation-delay: 650ms; }
+.sparkleField span:nth-child(14) { left: 65%; top: 72%; animation-delay: 720ms; }
+.sparkleField span:nth-child(15) { left: 73%; top: 35%; animation-delay: 860ms; }
+.sparkleField span:nth-child(16) { left: 88%; top: 52%; animation-delay: 930ms; }
+.sparkleField span:nth-child(17) { left: 45%; top: 73%; animation-delay: 560ms; }
+.sparkleField span:nth-child(18) { left: 58%; top: 28%; animation-delay: 790ms; }
+
+@keyframes wakeSparkle {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.3);
+  }
+
+  38% {
+    opacity: 1;
+    transform: translate3d(8px, -8px, 0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(28px, -28px, 0) scale(0.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkleField span {
+    animation-duration: 1ms;
+  }
+}
+

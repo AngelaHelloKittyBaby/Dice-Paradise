@@ -3,14 +3,15 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Copy, Info, Plus, Settings, Speaker, UserPlus, VolumeX, X } from 'lucide-react';
-import { GameRulesModal } from '@/components/game';
+import { ArrowLeft, Copy, Plus, Settings, UserPlus, X } from 'lucide-react';
 import { ResponsiveStage } from '@/components/layout';
-import { GameChat, StarIcon, type GameChatMessage } from '@/components/ui';
+import { GameChat, SoundToggle, StarIcon, type GameChatMessage } from '@/components/ui';
 import roomBackground from '@/assets/images/backgrounds/room/room-bg.png';
 import defaultAvatar from '@/assets/images/avatars/default-player.png';
-import { useRoomStore } from '@/stores';
-import type { Room, RoomMember } from '@/types/room';
+import { useHomeSoundSetting } from '@/hooks';
+import { startOnlineRoom } from '@/modules/room/roomApi';
+import { usePlayerStore, useRoomStore } from '@/stores';
+import type { RoomMember } from '@/types/room';
 import styles from './room.module.css';
 
 const chatMessages: GameChatMessage[] = [
@@ -21,18 +22,6 @@ const chatMessages: GameChatMessage[] = [
   { id: 'room-player-3', type: 'player', author: '乐乐玩家', avatar: defaultAvatar.src, text: '大家好运~' },
 ];
 
-const fallbackMembers: RoomMember[] = [
-  {
-    playerId: 'player-001',
-    name: '投骰大师',
-    avatar: '',
-    isHost: true,
-    isReady: true,
-    joinedAt: new Date().toISOString(),
-  },
-];
-
-const CURRENT_PLAYER_ID = 'player-001';
 const ROOM_SLOT_COUNT = 4;
 
 const avatarTones = [
@@ -46,28 +35,28 @@ const avatarTones = [
 
 const getMemberAvatar = (avatar?: string) => avatar || defaultAvatar.src;
 
-async function mockStartRoomGame(room: Room | null): Promise<boolean> {
-  await new Promise(resolve => {
-    window.setTimeout(resolve, 180);
-  });
-
-  return Boolean(room);
-}
-
 export default function RoomPage() {
   const router = useRouter();
+  const player = usePlayerStore(state => state.player);
+  const soundSettingFallback = usePlayerStore(state => state.settings.soundEnabled);
   const currentRoom = useRoomStore(state => state.currentRoom);
   const isHost = useRoomStore(state => state.isHost);
+  const currentPlayerId = useRoomStore(state => state.currentPlayerId);
   const startGame = useRoomStore(state => state.startGame);
   const leaveRoom = useRoomStore(state => state.leaveRoom);
   const toggleReady = useRoomStore(state => state.toggleReady);
   const updateRoomMembers = useRoomStore(state => state.updateRoomMembers);
-  const [isRulesOpen, setIsRulesOpen] = useState(false);
-  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
+  const [isCreatingGame, setIsCreatingGame] = useState(false);
+  const [isLeavingRoom, setIsLeavingRoom] = useState(false);
+  const [gameCreateError, setGameCreateError] = useState<string | null>(null);
 
   const roomId = currentRoom?.id ?? '等待接口返回';
-  const members = useMemo(() => currentRoom?.members ?? fallbackMembers, [currentRoom?.members]);
+  const { soundEnabled: isSoundEnabled, setSoundEnabled: setIsSoundEnabled } = useHomeSoundSetting(
+    player?.id,
+    soundSettingFallback
+  );
+  const members = useMemo(() => currentRoom?.members ?? [], [currentRoom?.members]);
   const orderedMembers = useMemo(() => {
     const hostMember = members.find(member => member.isHost) ?? members[0];
     const otherMembers = members.filter(member => member.playerId !== hostMember?.playerId);
@@ -78,7 +67,7 @@ export default function RoomPage() {
     () => Array.from({ length: ROOM_SLOT_COUNT }, (_, index) => orderedMembers[index] ?? null),
     [orderedMembers]
   );
-  const currentPlayerMember = members.find(member => member.playerId === CURRENT_PLAYER_ID);
+  const currentPlayerMember = members.find(member => member.playerId === currentPlayerId);
   const isCurrentPlayerReady = Boolean(currentPlayerMember?.isReady);
 
   const handleCopyRoomId = async () => {
@@ -92,20 +81,49 @@ export default function RoomPage() {
   };
 
   const handleStartGame = async () => {
-    if (!isHost) return;
+    if (!isHost || !currentRoom || isCreatingGame) return;
 
-    const canStart = startGame();
-    if (!canStart) return;
+    const canStartRoomGame =
+      currentRoom.members.length >= 2 && currentRoom.members.every(member => member.isHost || member.isReady);
+    if (!canStartRoomGame) return;
 
-    const canEnterGame = await mockStartRoomGame(currentRoom);
-    if (canEnterGame) {
-      router.push(`/game?roomId=${roomId}`);
+    setIsCreatingGame(true);
+    setGameCreateError(null);
+
+    try {
+      const game = await startOnlineRoom(roomId, {
+        player_id: currentPlayerId,
+      });
+      const canStart = startGame();
+      if (!canStart) return;
+
+      const params = new URLSearchParams({
+        mode: 'online',
+        roomId,
+        gameId: game.gameId,
+        playerId: currentPlayerId,
+      });
+
+      router.push(`/game?${params.toString()}`);
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '游戏创建失败，请稍后再试');
+    } finally {
+      setIsCreatingGame(false);
     }
   };
 
-  const handleLeaveRoom = () => {
-    leaveRoom();
-    router.push('/');
+  const handleLeaveRoom = async () => {
+    if (isLeavingRoom) return;
+
+    setIsLeavingRoom(true);
+    setGameCreateError(null);
+    try {
+      await leaveRoom();
+      router.push('/');
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '房间操作失败，请稍后再试');
+      setIsLeavingRoom(false);
+    }
   };
 
   const handleRemovePlayer = (playerId: string) => {
@@ -128,35 +146,26 @@ export default function RoomPage() {
     >
       <header className={styles.roomHeader}>
         <section className={styles.headerLeft} aria-label="房间导航">
-          <Link className={styles.logoArea} href="/">
-            <span className={styles.logoIconSlot} aria-hidden="true">
-              🎲
-            </span>
+          <Link href="/" className={styles.logoArea}>
+            <span className={styles.logoIconSlot}>🎲</span>
             <span className={styles.logoText}>
               投骰乐园
               <small>DICE PARADISE</small>
             </span>
           </Link>
-          <Link className={styles.backLobbyButton} href="/">
-            <ArrowLeft size={22} strokeWidth={3} />
-            返回大厅
-          </Link>
         </section>
 
         <section className={styles.headerRight} aria-label="房间工具栏">
-          <button className={`${styles.toolButton} ${styles.ruleButton}`} type="button" onClick={() => setIsRulesOpen(true)}>
-            <Info size={21} />
-            <span>规则说明</span>
-          </button>
-          <button className={`${styles.toolButton} ${styles.soundButton}`} type="button" onClick={() => setIsSoundEnabled(value => !value)}>
-            {isSoundEnabled ? <Speaker size={22} /> : <VolumeX size={22} />}
-            <span>{isSoundEnabled ? '音效开' : '音效关'}</span>
-          </button>
+          <SoundToggle
+            checked={isSoundEnabled}
+            onChange={setIsSoundEnabled}
+            ariaLabel={isSoundEnabled ? '关闭音效' : '开启音效'}
+          />
           <button className={`${styles.toolButton} ${styles.settingsButton}`} type="button" aria-label="设置">
             <Settings size={24} />
           </button>
-          <button className={styles.dismissButton} type="button" onClick={handleLeaveRoom}>
-            {isHost ? '解散房间' : '退出房间'}
+          <button className={styles.dismissButton} type="button" onClick={() => void handleLeaveRoom()} disabled={isLeavingRoom}>
+            {isLeavingRoom ? '退出中' : isHost ? '解散房间' : '退出房间'}
           </button>
         </section>
       </header>
@@ -176,18 +185,15 @@ export default function RoomPage() {
 
       <section className={styles.playerCards} aria-label="玩家卡片">
         {roomSlots.map((member, index) => {
-          const statusLabel = member?.isHost ? '房主' : member?.isReady ? '已准备 ✅' : '未准备';
           const isEmptySlot = !member;
+          const statusLabel = member?.isHost ? '房主' : member?.isReady ? '已准备 ✅' : '未准备';
+          const points = member?.points ?? (12600 - index * 1360);
 
           return (
             <article
               key={member?.playerId ?? `empty-room-slot-${index}`}
               className={`${styles.playerCard} ${isEmptySlot ? styles.emptyPlayerCard : styles.occupiedPlayerCard}`}
             >
-              <span className={styles.slotIcon} aria-hidden="true">
-                <UserPlus size={28} strokeWidth={2.6} />
-              </span>
-
               {member && isHost && !member.isHost && (
                 <button
                   className={styles.removePlayerButton}
@@ -200,7 +206,16 @@ export default function RoomPage() {
                 </button>
               )}
 
-              {member ? (
+              {isEmptySlot ? (
+                <>
+                  <span className={styles.slotIcon} aria-hidden="true">
+                    <UserPlus size={28} strokeWidth={2.6} />
+                  </span>
+                  <div className={styles.emptySlotContent}>
+                    <Plus size={86} strokeWidth={4.2} />
+                  </div>
+                </>
+              ) : (
                 <>
                   <div className={`${styles.avatarFrame} ${avatarTones[index % avatarTones.length]}`}>
                     <span
@@ -222,14 +237,10 @@ export default function RoomPage() {
                     </div>
                     <div className={styles.starRow}>
                       <StarIcon size={28} />
-                      <strong>{(12600 - index * 1360).toLocaleString()}</strong>
+                      <strong>{points.toLocaleString()}</strong>
                     </div>
                   </div>
                 </>
-              ) : (
-                <div className={styles.emptySlotContent}>
-                  <Plus size={86} strokeWidth={4.2} />
-                </div>
               )}
             </article>
           );
@@ -244,8 +255,8 @@ export default function RoomPage() {
           </p>
         </div>
         {isHost ? (
-          <button className={styles.startGameButton} type="button" onClick={handleStartGame}>
-            开始游戏
+          <button className={styles.startGameButton} type="button" disabled={isCreatingGame} onClick={handleStartGame}>
+            {isCreatingGame ? '创建中' : '开始游戏'}
           </button>
         ) : (
           <button
@@ -258,6 +269,7 @@ export default function RoomPage() {
             {isCurrentPlayerReady ? '已准备 ✅' : '准备'}
           </button>
         )}
+        {gameCreateError && <p className={styles.roomGameError}>{gameCreateError}</p>}
       </section>
 
       <GameChat
@@ -270,8 +282,6 @@ export default function RoomPage() {
         minHeight={220}
         maxHeight={430}
       />
-
-      <GameRulesModal open={isRulesOpen} onClose={() => setIsRulesOpen(false)} />
     </ResponsiveStage>
   );
 }

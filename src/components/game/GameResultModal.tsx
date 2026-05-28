@@ -1,23 +1,23 @@
 'use client';
 
 import clsx from 'clsx';
+import Image, { type StaticImageData } from 'next/image';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   Crown,
-  Dice5,
   Download,
   Home,
   RotateCcw,
   Share2,
-  Ship,
   Sparkles,
-  Target,
-  Trophy,
   X,
 } from 'lucide-react';
-import { StarIcon } from '@/components/ui';
+import gameoverArt from '@/assets/images/ui/icons/gameover.png';
+import yachtArt from '@/assets/images/ui/icons/游艇.png';
+import targetArt from '@/assets/images/ui/icons/靶子.png';
+import diceArt from '@/assets/images/ui/icons/骰子.png';
 import { mockGameResult, mockPlayerDetail } from '@/mocks/gameResult';
 import type {
   GameResultData,
@@ -42,7 +42,35 @@ export interface GameResultModalProps {
   onReplay?: () => void | Promise<void>;
   onShare?: () => void | Promise<void>;
   onSave?: (autoSave: boolean) => void | Promise<void>;
+  backLoading?: boolean;
+  replayLoading?: boolean;
+  actionError?: string | null;
+  allowOverlayDismiss?: boolean;
+  showActions?: boolean;
+  showAutoSave?: boolean;
+  showCloseButton?: boolean;
 }
+
+const celebrationColors = ['#7b5cff', '#ffd447', '#49c6ff', '#ff754b', '#7ce66c', '#ff5ea8', '#ffb13b'];
+
+const celebrationPieces = Array.from({ length: 72 }, (_, index) => {
+  const isLongStreamer = index % 3 === 0 || index % 7 === 0;
+  const swayDirection = index % 2 === 0 ? 1 : -1;
+  const left = 2 + ((index * 17) % 96);
+  const delay = (index % 18) * 0.055;
+  const duration = isLongStreamer ? 4.95 + (index % 5) * 0.08 : 4.35 + (index % 6) * 0.09;
+
+  return {
+    left: `${left}%`,
+    delay: `${delay.toFixed(2)}s`,
+    duration: `${duration.toFixed(2)}s`,
+    color: celebrationColors[index % celebrationColors.length],
+    width: isLongStreamer ? `${7 + (index % 3)}px` : `${10 + (index % 7)}px`,
+    height: isLongStreamer ? `${34 + (index % 6) * 6}px` : `${6 + (index % 4) * 2}px`,
+    sway: `${swayDirection * (42 + ((index * 13) % 112))}px`,
+    rotate: `${(index * 31) % 130 - 65}deg`,
+  };
+});
 
 const scoreRows = [
   {
@@ -90,11 +118,27 @@ function getRankTitle(rank: number): string {
   return `第${rank}名`;
 }
 
+const highlightIconAssets: Record<ResultHighlight['icon'], { src: StaticImageData; alt: string; className?: string }> = {
+  yacht: { src: yachtArt, alt: '快艇', className: styles.yachtImage },
+  upperBonus: { src: targetArt, alt: '上半区额外奖励', className: styles.targetImage },
+  bestRound: { src: diceArt, alt: '最高单回合', className: styles.diceImage },
+  straight: { src: targetArt, alt: '大顺子', className: styles.targetImage },
+  fourKind: { src: diceArt, alt: '四条', className: styles.diceImage },
+};
+
 function getHighlightIcon(item: ResultHighlight) {
-  if (item.icon === 'yacht') return <Ship size={54} strokeWidth={2.4} />;
-  if (item.icon === 'straight') return <Target size={54} strokeWidth={2.4} />;
-  if (item.icon === 'fourKind') return <Dice5 size={54} strokeWidth={2.4} />;
-  return <StarIcon size={54} strokeWidth={2.4} />;
+  const asset = highlightIconAssets[item.icon] ?? highlightIconAssets.bestRound;
+
+  return (
+    <Image
+      src={asset.src}
+      alt={asset.alt}
+      width={112}
+      height={112}
+      className={clsx(styles.highlightImage, asset.className)}
+      sizes="112px"
+    />
+  );
 }
 
 export function ScoreDetailPanel({ player, loading = false }: ScoreDetailProps) {
@@ -152,10 +196,20 @@ export function GameResultModal({
   onReplay,
   onShare,
   onSave,
+  backLoading = false,
+  replayLoading = false,
+  actionError,
+  allowOverlayDismiss = false,
+  showActions = true,
+  showAutoSave = true,
+  showCloseButton = false,
 }: GameResultModalProps) {
   const data = result ?? mockGameResult;
   const sortedPlayers = useMemo(
-    () => [...data.players].sort((first, second) => first.rank - second.rank),
+    () =>
+      [...data.players]
+        .sort((first, second) => second.score - first.score || first.rank - second.rank)
+        .map((player, index) => ({ ...player, rank: index + 1 })),
     [data.players]
   );
   const winner = sortedPlayers[0];
@@ -165,17 +219,14 @@ export function GameResultModal({
   const [detailLoading, setDetailLoading] = useState(false);
   const [autoSave, setAutoSave] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
     if (!open || sortedPlayers.length === 0) return;
 
     const preferredPlayerId = initialSelectedPlayerId ?? sortedPlayers[0].id;
-    const hasSelectedPlayer = sortedPlayers.some(player => player.id === selectedPlayerId);
-
-    if (!hasSelectedPlayer || initialSelectedPlayerId) {
-      setSelectedPlayerId(preferredPlayerId);
-    }
-  }, [initialSelectedPlayerId, open, selectedPlayerId, sortedPlayers]);
+    setSelectedPlayerId(preferredPlayerId);
+  }, [initialSelectedPlayerId, open, sortedPlayers]);
 
   useEffect(() => {
     if (!open) return;
@@ -188,6 +239,20 @@ export function GameResultModal({
     return () => window.clearTimeout(timer);
   }, [open, selectedPlayerId]);
 
+  useEffect(() => {
+    if (!open) {
+      setShowCelebration(false);
+      return;
+    }
+
+    setShowCelebration(true);
+    const timer = window.setTimeout(() => {
+      setShowCelebration(false);
+    }, 5200);
+
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
   if (!open || !winner) {
     return null;
   }
@@ -195,6 +260,9 @@ export function GameResultModal({
   const selectedPlayer =
     sortedPlayers.find(player => player.id === selectedPlayerId) ?? sortedPlayers[0];
   const selectedDetail = data.playerDetails[selectedPlayer.id] ?? mockPlayerDetail;
+  const selectedHighlights = data.playerHighlights?.[selectedPlayer.id] ?? data.highlights;
+  const canDismiss = Boolean((showCloseButton || allowOverlayDismiss) && onClose);
+  const showFooter = showActions || showAutoSave;
 
   async function handleSave() {
     setSaving(true);
@@ -207,7 +275,7 @@ export function GameResultModal({
   }
 
   return (
-    <div className={styles.overlay} role="presentation" onClick={onClose}>
+    <div className={styles.overlay} role="presentation" onClick={canDismiss ? onClose : undefined}>
       <section
         className={styles.modal}
         role="dialog"
@@ -215,24 +283,26 @@ export function GameResultModal({
         aria-labelledby="game-result-title"
         onClick={event => event.stopPropagation()}
       >
-        <button className={styles.closeButton} type="button" aria-label="关闭结算弹窗" onClick={onClose}>
-          <X size={34} strokeWidth={3.2} />
-        </button>
+        {showCloseButton && onClose && (
+          <button className={styles.closeButton} type="button" aria-label="关闭结算弹窗" onClick={onClose}>
+            <X size={34} strokeWidth={3.2} />
+          </button>
+        )}
 
         <header className={styles.header}>
-          <span className={styles.confettiOne} />
-          <span className={styles.confettiTwo} />
-          <span className={styles.confettiThree} />
-          <div className={styles.ribbonBack} />
-          <div className={styles.trophyWrap}>
-            <Trophy size={74} fill="currentColor" strokeWidth={2.4} />
-            <Dice5 className={styles.leftDice} size={46} />
-            <Dice5 className={styles.rightDice} size={46} />
-          </div>
-          <div className={styles.laurelLeft} />
-          <div className={styles.laurelRight} />
-          <h2 id="game-result-title">游戏结束</h2>
-          <p>本局游戏已结束，以下是最终结算结果</p>
+          <Image
+            src={gameoverArt}
+            alt=""
+            priority
+            width={790}
+            height={527}
+            className={styles.gameoverArt}
+            sizes="790px"
+          />
+          <h2 id="game-result-title" className={styles.srOnly}>
+            游戏结束
+          </h2>
+          <p className={styles.srOnly}>本局游戏已结束，以下是最终结算结果</p>
         </header>
 
         <div className={styles.championBanner}>
@@ -303,61 +373,102 @@ export function GameResultModal({
             <span />
           </h3>
           <div className={styles.highlightList}>
-            {data.highlights.map(item => (
+            {selectedHighlights.map(item => (
               <article className={styles.highlightItem} key={item.id}>
                 <span className={styles.highlightIcon}>{getHighlightIcon(item)}</span>
                 <div>
                   <strong>{item.name}</strong>
                   <p>
-                    <em>{item.value}</em>
+                    <em>{item.icon === 'upperBonus' && item.value > 0 ? `+${item.value}` : item.value}</em>
                     {item.unit}
                   </p>
+                  {item.status && <small className={styles.highlightStatus}>{item.status}</small>}
                 </div>
               </article>
             ))}
           </div>
         </section>
 
-        <footer className={styles.footer}>
-          <div className={styles.actionRow}>
-            <button className={clsx(styles.actionButton, styles.blueButton)} type="button" onClick={onBackLobby}>
-              <Home size={34} fill="currentColor" />
-              返回大厅
-            </button>
-            <button className={clsx(styles.actionButton, styles.blueButton)} type="button" onClick={onReplay}>
-              <RotateCcw size={34} />
-              再来一局
-            </button>
-            <button className={clsx(styles.actionButton, styles.goldButton)} type="button" onClick={onShare}>
-              <Share2 size={34} />
-              分享战绩
-            </button>
-            <button
-              className={clsx(styles.actionButton, styles.greenButton)}
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              <Download size={34} />
-              {saving ? '保存中' : '保存战绩'}
-            </button>
-          </div>
+        {showFooter && (
+          <footer className={styles.footer}>
+            {showActions && (
+              <div className={styles.actionRow}>
+                <button
+                  className={clsx(styles.actionButton, styles.blueButton)}
+                  type="button"
+                  onClick={onBackLobby}
+                  disabled={backLoading}
+                >
+                  <Home size={34} fill="currentColor" />
+                  {backLoading ? '返回中' : '返回大厅'}
+                </button>
+                <button
+                  className={clsx(styles.actionButton, styles.blueButton)}
+                  type="button"
+                  onClick={onReplay}
+                  disabled={replayLoading}
+                >
+                  <RotateCcw size={34} />
+                  {replayLoading ? '创建中' : '再来一局'}
+                </button>
+                <button className={clsx(styles.actionButton, styles.goldButton)} type="button" onClick={onShare}>
+                  <Share2 size={34} />
+                  分享战绩
+                </button>
+                <button
+                  className={clsx(styles.actionButton, styles.greenButton)}
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  <Download size={34} />
+                  {saving ? '保存中' : '保存战绩'}
+                </button>
+              </div>
+            )}
 
-          <label className={styles.autoSave}>
-            <input
-              type="checkbox"
-              checked={autoSave}
-              onChange={event => setAutoSave(event.target.checked)}
-            />
-            <span>
-              <Check size={22} strokeWidth={3.2} />
-            </span>
-            自动保存本局战绩（可在历史记录中查看）
-          </label>
-        </footer>
+            {actionError && <p className={styles.actionError}>{actionError}</p>}
+
+            {showAutoSave && (
+              <label className={styles.autoSave}>
+                <input
+                  type="checkbox"
+                  checked={autoSave}
+                  onChange={event => setAutoSave(event.target.checked)}
+                />
+                <span>
+                  <Check size={22} strokeWidth={3.2} />
+                </span>
+                自动保存本局战绩（可在历史记录中查看）
+              </label>
+            )}
+          </footer>
+        )}
 
         <Sparkles className={styles.sparkleTop} size={28} fill="currentColor" />
         <Sparkles className={styles.sparkleBottom} size={22} fill="currentColor" />
+        {showCelebration && (
+          <div className={styles.celebrationLayer} aria-hidden="true">
+            {celebrationPieces.map((piece, index) => (
+              <span
+                className={styles.celebrationPiece}
+                key={`${piece.left}-${index}`}
+                style={
+                  {
+                    '--confetti-left': piece.left,
+                    '--confetti-delay': piece.delay,
+                    '--confetti-duration': piece.duration,
+                    '--confetti-color': piece.color,
+                    '--confetti-width': piece.width,
+                    '--confetti-height': piece.height,
+                    '--confetti-sway': piece.sway,
+                    '--confetti-rotate': piece.rotate,
+                  } as CSSProperties
+                }
+              />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

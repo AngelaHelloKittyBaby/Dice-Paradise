@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -10,24 +10,34 @@ import {
   DoorOpen,
   Info,
   LockKeyhole,
-  Speaker,
-  VolumeX,
 } from 'lucide-react';
-import { GameResultModal, GameRulesModal } from '@/components/game';
+import { GameResultModal, GameRulesModal, YachtScoreEffect } from '@/components/game';
 import { ResponsiveStage } from '@/components/layout';
-import { GameChat, StarIcon, type GameChatMessage } from '@/components/ui';
-import { CATEGORY_NAMES, MAX_ROLLS_PER_TURN, SCORE_CATEGORIES } from '@/constants/gameRules';
+import { GameChat, SoundToggle, StarIcon, type GameChatMessage } from '@/components/ui';
+import { CATEGORY_NAMES, LOWER_CATEGORIES, MAX_ROLLS_PER_TURN, SCORE_CATEGORIES } from '@/constants/gameRules';
 import gameBackground from '@/assets/images/backgrounds/game/game-bg.png';
+import { useHomeSoundSetting } from '@/hooks';
+import {
+  getGameStatus,
+  quitGame,
+  rollGameDice,
+} from '@/modules/game/gameApi';
+import { getPossibleScoreSnapshot, getScoreLockStatus, getScorePanelPlayers, submitScoreItem } from '@/modules/game/scoreApi';
+import {
+  backToLobbySettlementGame,
+  getSettlementResultData,
+  rematchSettlementGame,
+} from '@/modules/result/settlementApi';
 import { usePlayerStore, useRoomStore } from '@/stores';
 import type { DiceValue, ScoreCategory } from '@/types/game';
+import type { GameStatusSnapshot } from '@/types/gameApi';
 import type { GameResultData } from '@/types/gameResult';
+import type { PossibleScoreSnapshot, ScoreLockStatusSnapshot, ScorePanelPlayerSnapshot } from '@/types/scoreApi';
 import {
   calculateGrandTotal,
   calculateLowerTotal,
-  calculateScore,
   calculateUpperBonus,
   calculateUpperSubtotal,
-  getPossibleScores,
 } from '@/utils/scoreCalculator';
 import styles from './game.module.css';
 
@@ -46,6 +56,14 @@ interface GameEventItem {
   score?: string;
 }
 
+interface GameQueryState {
+  mode: string;
+  roomId: string | null;
+  gameId: string | null;
+  playerId: string | null;
+  difficulty: string | null;
+}
+
 interface RollDicePayload {
   roomId: string;
   playerId: string;
@@ -53,16 +71,9 @@ interface RollDicePayload {
   locked: boolean[];
 }
 
-interface SelectScorePayload {
-  roomId: string;
-  playerId: string;
-  category: ScoreCategory;
-  dice: DiceValue[];
-  locked: boolean[];
-}
-
 const initialDice: DiceValue[] = [1, 1, 1, 1, 1];
 const initialLocked = [false, false, false, false, false];
+const DICE_THROW_ANIMATION_MS = 1120;
 
 const avatarClasses = [
   styles.avatarCaptain,
@@ -73,11 +84,7 @@ const avatarClasses = [
   styles.avatarPurple,
 ];
 
-const defaultGameEvents: GameEventItem[] = [
-  { id: 'event-1', text: '本局开始，等待玩家首次投骰。' },
-  { id: 'event-2', text: '每回合最多 3 次投掷，可以保留想要的骰子。' },
-  { id: 'event-3', text: '投骰后选择一个计分项，本项得分会加入总分。' },
-];
+const defaultGameEvents: GameEventItem[] = [];
 
 function delay(ms: number) {
   return new Promise(resolve => {
@@ -100,66 +107,15 @@ async function mockSyncLockedDice(payload: RollDicePayload): Promise<boolean[]> 
   return payload.locked;
 }
 
-async function mockSelectScore(payload: SelectScorePayload): Promise<number> {
-  await delay(240);
-  return calculateScore(payload.dice, payload.category);
+function normalizeLockedDiceState(nextLocked: boolean[] | undefined, fallback: boolean[] = initialLocked) {
+  return nextLocked?.length === initialLocked.length ? nextLocked : fallback;
 }
 
-function formatDiceValues(values: DiceValue[]) {
-  return values.map(value => `${value}点`).join('、');
-}
 
-function getBestPossibleScore(possibleScores: Partial<Record<ScoreCategory, number>>) {
-  return Object.entries(possibleScores).reduce<{ category: ScoreCategory; score: number } | null>(
-    (best, [category, score]) => {
-      if (score === undefined) return best;
-      if (!best || score > best.score) {
-        return { category: category as ScoreCategory, score };
-      }
+function toOptionalBackendPlayerId(playerId: string) {
+  const backendPlayerId = Number(playerId);
 
-      return best;
-    },
-    null
-  );
-}
-
-function getUpperBonusAward(
-  previousScores: Partial<Record<ScoreCategory, number>>,
-  nextScores: Partial<Record<ScoreCategory, number>>
-) {
-  const previousBonus = calculateUpperBonus(calculateUpperSubtotal(previousScores));
-  const nextBonus = calculateUpperBonus(calculateUpperSubtotal(nextScores));
-
-  return Math.max(0, nextBonus - previousBonus);
-}
-
-async function mockFetchGameEvents(
-  roomId: string,
-  playerName: string,
-  rolledDice: DiceValue[],
-  nextPossibleScores: Partial<Record<ScoreCategory, number>>,
-  nextRollsLeft: number
-): Promise<GameEventItem[]> {
-  await delay(120);
-
-  const bestScore = getBestPossibleScore(nextPossibleScores);
-  const bestScoreEvent = bestScore
-    ? {
-        id: `${roomId}-best`,
-        text: `${CATEGORY_NAMES[bestScore.category]} 当前可得 ${bestScore.score} 分，可以选择计分或继续重掷。`,
-        score: `+${bestScore.score}`,
-      }
-    : {
-        id: `${roomId}-best`,
-        text: '当前没有更高的组合项，可以考虑保留骰子后继续重掷。',
-      };
-
-  return [
-    { id: `${roomId}-roll`, text: `${playerName} 掷出了 ${formatDiceValues(rolledDice)}。`, score: `剩余 ${nextRollsLeft} 次` },
-    bestScoreEvent,
-    { id: `${roomId}-lock`, text: '已保留的骰子本回合会固定，其余骰子可继续重掷。' },
-    { id: `${roomId}-tip`, text: '小顺子需要连续 4 个点数，大顺子需要连续 5 个点数。' },
-  ];
+  return Number.isInteger(backendPlayerId) ? backendPlayerId : null;
 }
 
 function getDiceDots(value: DiceValue) {
@@ -197,27 +153,27 @@ function getCategoryHint(category: ScoreCategory) {
 
 function getCategoryIcon(category: ScoreCategory) {
   const icons: Record<ScoreCategory, string> = {
-    ones: '⚀',
-    twos: '⚁',
-    threes: '⚂',
-    fours: '⚃',
-    fives: '⚄',
-    sixes: '⚅',
-    threeOfAKind: '🔷',
-    fourOfAKind: '💠',
-    fullHouse: '🏠',
-    smallStraight: '🌈',
-    largeStraight: '🚀',
-    yacht: '⛵',
-    chance: '☘️',
+    ones: '1',
+    twos: '2',
+    threes: '3',
+    fours: '4',
+    fives: '5',
+    sixes: '6',
+    threeOfAKind: '3x',
+    fourOfAKind: '4x',
+    fullHouse: 'FH',
+    smallStraight: 'S',
+    largeStraight: 'L',
+    yacht: 'Y',
+    chance: '?',
   };
 
   return icons[category];
 }
 
-function PlayerCard({ player }: { player: GamePlayer }) {
+function PlayerCard({ player, isActive }: { player: GamePlayer; isActive?: boolean }) {
   return (
-    <article className={styles.playerCard}>
+    <article className={`${styles.playerCard} ${isActive ? styles.playerCardActive : ''}`}>
       <div className={styles.rankBadge}>{player.score > 0 ? '★' : player.avatarLabel}</div>
       <div className={`${styles.playerAvatar} ${player.avatarClass}`}>{player.avatarLabel}</div>
       <div className={styles.playerInfo}>
@@ -230,6 +186,7 @@ function PlayerCard({ player }: { player: GamePlayer }) {
           {player.score.toLocaleString()}
         </div>
       </div>
+      {isActive && <div className={styles.activeIndicator} />}
     </article>
   );
 }
@@ -276,49 +233,133 @@ function DiceFace({
 export default function GamePage() {
   const router = useRouter();
   const player = usePlayerStore(state => state.player);
+  const soundSettingFallback = usePlayerStore(state => state.settings.soundEnabled);
   const currentRoom = useRoomStore(state => state.currentRoom);
-  const [queryState, setQueryState] = useState<{ mode: string; roomId: string | null }>({
+  const setCurrentRoom = useRoomStore(state => state.setCurrentRoom);
+  const [queryState, setQueryState] = useState<GameQueryState>({
     mode: 'room',
     roomId: null,
+    gameId: null,
+    playerId: null,
+    difficulty: null,
   });
+  const [serverGameStatus, setServerGameStatus] = useState<GameStatusSnapshot | null>(null);
   const [isResultOpen, setIsResultOpen] = useState(false);
   const [isRulesOpen, setIsRulesOpen] = useState(false);
-  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [dice, setDice] = useState<DiceValue[]>(initialDice);
   const [locked, setLocked] = useState<boolean[]>(initialLocked);
   const [rollsLeft, setRollsLeft] = useState(MAX_ROLLS_PER_TURN);
   const [isRolling, setIsRolling] = useState(false);
-  const [possibleScores, setPossibleScores] = useState<Partial<Record<ScoreCategory, number>>>({});
+  const [possibleScores, setPossibleScores] = useState<PossibleScoreSnapshot>({});
   const [completedCategories, setCompletedCategories] = useState<ScoreCategory[]>([]);
+  const [unlockedScoreCategories, setUnlockedScoreCategories] = useState<ScoreCategory[]>(
+    SCORE_CATEGORIES.map(item => item.category)
+  );
   const [playerScores, setPlayerScores] = useState<Partial<Record<ScoreCategory, number>>>({});
+  const [scorePanelPlayers, setScorePanelPlayers] = useState<ScorePanelPlayerSnapshot[]>([]);
   const [gameEvents, setGameEvents] = useState<GameEventItem[]>(defaultGameEvents);
+  const [yachtEffectKey, setYachtEffectKey] = useState(0);
+  const [isSubmittingScore, setIsSubmittingScore] = useState(false);
+  const [isRematching, setIsRematching] = useState(false);
+  const [isReturningLobby, setIsReturningLobby] = useState(false);
+  const [isSettlementLoading, setIsSettlementLoading] = useState(false);
+  const [settlementResultData, setSettlementResultData] = useState<GameResultData | null>(null);
+  const [resultActionError, setResultActionError] = useState<string | null>(null);
   const rollingGuardRef = useRef(false);
+  const scoreSubmittingGuardRef = useRef(false);
+  const { soundEnabled: isSoundEnabled, setSoundEnabled: setIsSoundEnabled } = useHomeSoundSetting(
+    player?.id,
+    soundSettingFallback
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setQueryState({
       mode: params.get('mode') ?? 'room',
       roomId: params.get('roomId'),
+      gameId: params.get('gameId'),
+      playerId: params.get('playerId'),
+      difficulty: params.get('difficulty'),
     });
   }, []);
 
+  const applyScoreLockStatus = useCallback((lockStatus: ScoreLockStatusSnapshot) => {
+    setCompletedCategories(lockStatus.completedCategories);
+    setUnlockedScoreCategories(lockStatus.unlockedCategories);
+    setPlayerScores(lockStatus.scores);
+  }, []);
+
+  const refreshScoreBoard = useCallback(
+    async (gameId: string, playerId: string, shouldFetchPossibleScores: boolean) => {
+      const [lockStatus, nextPossibleScores] = await Promise.all([
+        getScoreLockStatus(gameId, playerId),
+        shouldFetchPossibleScores ? getPossibleScoreSnapshot(gameId) : Promise.resolve<PossibleScoreSnapshot>({}),
+      ]);
+
+      applyScoreLockStatus(lockStatus);
+      setPossibleScores(nextPossibleScores);
+
+      return lockStatus;
+    },
+    [applyScoreLockStatus]
+  );
+
   const mode = queryState.mode;
-  const roomId = queryState.roomId ?? currentRoom?.id ?? (mode === 'single' ? '单人练习' : '876643');
-  const currentPlayerId = player?.id ?? 'player-001';
-  const currentPlayerName = player?.name ?? '乐乐玩家';
-  const isSingleMode = mode === 'single' && !queryState.roomId;
+  const isLocalMode = mode === 'single' || mode === 'local';
+  const roomId = queryState.roomId ?? currentRoom?.id ?? (isLocalMode ? '本地对局' : '876643');
+  const selfPlayerId = queryState.playerId ?? player?.id ?? 'player-001';
+  const activePlayerId = serverGameStatus?.currentPlayer ?? selfPlayerId;
+  const scorePanelPlayerById = useMemo(
+    () => Object.fromEntries(scorePanelPlayers.map(item => [item.playerId, item])),
+    [scorePanelPlayers]
+  );
+  const syncedSelfPlayer = serverGameStatus?.players.find(item => item.playerId === selfPlayerId);
+  const syncedActivePlayer = serverGameStatus?.players.find(item => item.playerId === activePlayerId);
+  const panelSelfPlayer = scorePanelPlayerById[selfPlayerId];
+  const panelActivePlayer = scorePanelPlayerById[activePlayerId];
+  const selfPlayerName = panelSelfPlayer?.username ?? syncedSelfPlayer?.name ?? player?.name ?? '乐乐玩家';
+  const activePlayerName = panelActivePlayer?.username ?? syncedActivePlayer?.name ?? selfPlayerName;
+  const isSingleMode = isLocalMode && !queryState.roomId;
   const isRoomGame = Boolean(queryState.roomId && currentRoom);
-  const showChat = isRoomGame;
+  const showChat = isRoomGame || mode === 'online';
   const gameChatMessages = useMemo<GameChatMessage[]>(
     () => [
       { id: 'game-system-start', type: 'system', author: '系统消息', text: `房间 ${roomId} 对局已开始。` },
-      { id: 'game-player-hello', type: 'player', author: currentPlayerName, avatar: player?.avatar, text: '大家好运~' },
+      { id: 'game-player-hello', type: 'player', author: selfPlayerName, avatar: player?.avatar, text: '大家好运~' },
       { id: 'game-system-tip', type: 'system', author: '系统消息', text: '投骰后请选择一个计分项完成本回合。' },
     ],
-    [currentPlayerName, player?.avatar, roomId]
+    [player?.avatar, roomId, selfPlayerName]
   );
 
   const players = useMemo<GamePlayer[]>(() => {
+    if (serverGameStatus) {
+      const orderedPlayers = [...serverGameStatus.players].sort((first, second) => {
+        if (first.playerId === selfPlayerId) return -1;
+        if (second.playerId === selfPlayerId) return 1;
+        return 0;
+      });
+
+      return orderedPlayers.map((item, index) => ({
+        id: item.playerId,
+        name: scorePanelPlayerById[item.playerId]?.username ?? item.name,
+        score: item.totalScore,
+        isHost: item.playerId === selfPlayerId,
+        avatarClass: item.isAi ? styles.avatarBot : avatarClasses[index % avatarClasses.length],
+        avatarLabel: item.isAi ? 'AI' : item.playerId === selfPlayerId ? 'P' : `${index + 1}`,
+      }));
+    }
+
+    if (scorePanelPlayers.length > 0) {
+      return scorePanelPlayers.map((item, index) => ({
+        id: item.playerId,
+        name: item.username,
+        score: item.playerId === selfPlayerId ? calculateGrandTotal(playerScores) : 0,
+        isHost: item.playerId === selfPlayerId,
+        avatarClass: avatarClasses[index % avatarClasses.length],
+        avatarLabel: item.playerId === selfPlayerId ? 'P' : `${index + 1}`,
+      }));
+    }
+
     if (isRoomGame && currentRoom) {
       return currentRoom.members.map((member, index) => ({
         id: member.playerId,
@@ -326,19 +367,19 @@ export default function GamePage() {
         score: 0,
         isHost: member.isHost,
         avatarClass: avatarClasses[index % avatarClasses.length],
-        avatarLabel: member.isHost ? '🎲' : `${index + 1}`,
+        avatarLabel: member.isHost ? 'P' : `${index + 1}`,
       }));
     }
 
     if (mode === 'ai') {
       return [
         {
-          id: currentPlayerId,
-          name: currentPlayerName,
+          id: selfPlayerId,
+          name: selfPlayerName,
           score: 0,
           isHost: true,
           avatarClass: styles.avatarCaptain,
-          avatarLabel: '🎲',
+          avatarLabel: 'P',
         },
         {
           id: 'ai-001',
@@ -352,28 +393,73 @@ export default function GamePage() {
 
     return [
       {
-        id: currentPlayerId,
-        name: currentPlayerName,
+        id: selfPlayerId,
+        name: selfPlayerName,
         score: calculateGrandTotal(playerScores),
         isHost: true,
         avatarClass: styles.avatarCaptain,
-        avatarLabel: '🎲',
+        avatarLabel: 'P',
       },
     ];
-  }, [currentPlayerId, currentPlayerName, currentRoom, isRoomGame, mode, playerScores]);
+  }, [
+    currentRoom,
+    isRoomGame,
+    mode,
+    playerScores,
+    scorePanelPlayerById,
+    scorePanelPlayers,
+    selfPlayerId,
+    selfPlayerName,
+    serverGameStatus,
+  ]);
 
-  const currentUpperScore = calculateUpperSubtotal(playerScores);
+  const syncedScoresByPlayerId = useMemo<Record<string, Partial<Record<ScoreCategory, number>>>>(() => {
+    if (!serverGameStatus) return {};
+
+    return Object.fromEntries(serverGameStatus.players.map(item => [item.playerId, item.scores]));
+  }, [serverGameStatus]);
+
+  const selfScores = useMemo<Partial<Record<ScoreCategory, number>>>(() => {
+    if (!queryState.gameId) return playerScores;
+    if (selfPlayerId === activePlayerId) return playerScores;
+    return syncedSelfPlayer?.scores ?? {};
+  }, [activePlayerId, playerScores, queryState.gameId, selfPlayerId, syncedSelfPlayer?.scores]);
+  const currentUpperScore = calculateUpperSubtotal(selfScores);
   const currentUpperBonus = calculateUpperBonus(currentUpperScore);
-  const currentLowerScore = calculateLowerTotal(playerScores);
-  const currentTotalScore = calculateGrandTotal(playerScores);
+  const currentLowerScore = calculateLowerTotal(selfScores);
+  const currentTotalScore = syncedSelfPlayer?.totalScore ?? calculateGrandTotal(selfScores);
+  const currentResultPlayerId = useMemo(() => {
+    const currentIndex = players.findIndex(item => item.id === selfPlayerId);
+    return currentIndex >= 0 ? currentIndex + 1 : 1;
+  }, [players, selfPlayerId]);
+  const applyGameStatusSnapshot = useCallback((status: GameStatusSnapshot) => {
+    const currentSnapshot = status.players.find(item => item.playerId === status.currentPlayer) ?? status.players[0];
+    const nextCompletedCategories = Object.keys(currentSnapshot?.scores ?? {}) as ScoreCategory[];
+
+    setServerGameStatus(status);
+    setDice(status.dice);
+    setLocked(status.diceLocked.length === initialLocked.length ? status.diceLocked : initialLocked);
+    setRollsLeft(status.rollsLeft);
+    setPlayerScores(currentSnapshot?.scores ?? {});
+    setCompletedCategories(nextCompletedCategories);
+    setUnlockedScoreCategories(
+      SCORE_CATEGORIES.map(item => item.category).filter(category => !nextCompletedCategories.includes(category))
+    );
+    setPossibleScores({});
+
+    return {
+      currentSnapshot,
+      nextCompletedCategories,
+    };
+  }, []);
 
   const gameResultData = useMemo<GameResultData>(() => {
     const resultPlayers = players.map((item, index) => ({
       id: index + 1,
       nickname: item.name,
       avatar: '',
-      score: item.id === currentPlayerId ? currentTotalScore : item.score,
-      isOwner: item.id === currentPlayerId,
+      score: item.id === selfPlayerId ? currentTotalScore : item.score,
+      isOwner: item.id === selfPlayerId,
       rank: 0,
     }));
 
@@ -408,50 +494,213 @@ export default function GamePage() {
       ])
     );
 
-    const bestRoundScore = Math.max(0, ...Object.values(playerScores).filter((value): value is number => typeof value === 'number'));
+    const bestRoundScore = Math.max(0, ...Object.values(selfScores).filter((value): value is number => typeof value === 'number'));
 
     return {
       players: rankedPlayers,
       playerDetails,
       highlights: [
-        { id: 'yacht', icon: 'yacht', name: '快艇', value: playerScores.yacht === 50 ? 1 : 0, unit: '次' },
-        { id: 'straight', icon: 'straight', name: '大顺子', value: (playerScores.largeStraight ?? 0) > 0 ? 1 : 0, unit: '次' },
-        { id: 'four-kind', icon: 'fourKind', name: '四条', value: (playerScores.fourOfAKind ?? 0) > 0 ? 1 : 0, unit: '次' },
-        { id: 'best-round', icon: 'bestRound', name: '最高单项', value: bestRoundScore, unit: '分' },
+        { id: 'yacht', icon: 'yacht', name: '快艇', value: selfScores.yacht === 50 ? 1 : 0, unit: '次' },
+        {
+          id: 'upper-bonus',
+          icon: 'upperBonus',
+          name: '上半区额外奖励',
+          value: currentUpperBonus > 0 ? 35 : 0,
+          unit: '分',
+          status: currentUpperBonus > 0 ? '已获得' : '未获得',
+        },
+        { id: 'best-round', icon: 'bestRound', name: '最高单回合', value: bestRoundScore, unit: '分' },
       ],
     };
   }, [
     currentLowerScore,
-    currentPlayerId,
     currentTotalScore,
     currentUpperBonus,
     currentUpperScore,
-    playerScores,
     players,
+    selfPlayerId,
+    selfScores,
   ]);
+  const displayedResultData = settlementResultData ?? gameResultData;
+  const resultSelectedPlayerId = settlementResultData
+    ? toOptionalBackendPlayerId(selfPlayerId) ?? settlementResultData.players[0]?.id ?? currentResultPlayerId
+    : currentResultPlayerId;
+
+  const resetLocalMatch = () => {
+    rollingGuardRef.current = false;
+    scoreSubmittingGuardRef.current = false;
+    setIsResultOpen(false);
+    setResultActionError(null);
+    setSettlementResultData(null);
+    setDice(initialDice);
+    setLocked(initialLocked);
+    setRollsLeft(MAX_ROLLS_PER_TURN);
+    setIsRolling(false);
+    setIsSubmittingScore(false);
+    setPossibleScores({});
+    setCompletedCategories([]);
+    setUnlockedScoreCategories(SCORE_CATEGORIES.map(item => item.category));
+    setPlayerScores({});
+    setScorePanelPlayers([]);
+    setGameEvents(defaultGameEvents);
+  };
+
+  const handleReplay = async () => {
+    if (isRematching) return;
+
+    if (!queryState.gameId) {
+      resetLocalMatch();
+      return;
+    }
+
+    setIsRematching(true);
+    setResultActionError(null);
+
+    try {
+      const rematch = await rematchSettlementGame(queryState.gameId, {
+        player_id: selfPlayerId,
+      });
+      const params = new URLSearchParams({
+        mode: rematch.gameState.gameMode,
+        gameId: rematch.newGameId,
+        playerId: selfPlayerId,
+      });
+
+      if (queryState.roomId) params.set('roomId', queryState.roomId);
+      if (queryState.difficulty) params.set('difficulty', queryState.difficulty);
+
+      setIsResultOpen(false);
+      setSettlementResultData(null);
+      setServerGameStatus(rematch.gameState);
+      setDice(rematch.gameState.dice);
+      setLocked(normalizeLockedDiceState(rematch.gameState.diceLocked));
+      setRollsLeft(rematch.gameState.rollsLeft);
+      setPossibleScores({});
+      setCompletedCategories([]);
+      setUnlockedScoreCategories(SCORE_CATEGORIES.map(item => item.category));
+      setPlayerScores({});
+
+      if (isRoomGame && currentRoom) {
+        setCurrentRoom({
+          ...currentRoom,
+          status: 'playing',
+        });
+      }
+
+      router.push(`/game?${params.toString()}`);
+    } catch (error) {
+      setResultActionError(error instanceof Error ? error.message : '再来一局失败，请稍后再试');
+    } finally {
+      setIsRematching(false);
+    }
+  };
+
+  const handleBackLobbyFromResult = async () => {
+    if (isReturningLobby) return;
+
+    if (!queryState.gameId) {
+      router.push('/');
+      return;
+    }
+
+    setIsReturningLobby(true);
+    setResultActionError(null);
+
+    try {
+      await backToLobbySettlementGame(queryState.gameId, {
+        player_id: selfPlayerId,
+      });
+      router.push('/');
+    } catch (error) {
+      setResultActionError(error instanceof Error ? error.message : '返回首页失败，请稍后再试');
+    } finally {
+      setIsReturningLobby(false);
+    }
+  };
 
   const scoreColumns = players.length.toString();
   const scoreTableStyle = { '--score-columns': scoreColumns } as CSSProperties;
 
   useEffect(() => {
-    if (isSingleMode) {
-      setGameEvents([{ id: 'single-start', text: '单人练习已开始，聊天功能不会显示。' }]);
-    }
+    if (isSingleMode) setGameEvents(defaultGameEvents);
   }, [isSingleMode]);
+
+  useEffect(() => {
+    const gameId = queryState.gameId;
+    if (!gameId) return;
+
+    let isCancelled = false;
+
+    Promise.all([getGameStatus(gameId), getScorePanelPlayers(gameId)])
+      .then(async ([status, panelPlayers]) => {
+        if (isCancelled) return;
+
+        applyGameStatusSnapshot(status);
+        setScorePanelPlayers(panelPlayers);
+        await refreshScoreBoard(
+          gameId,
+          status.currentPlayer ?? selfPlayerId,
+          status.rollsLeft < MAX_ROLLS_PER_TURN
+        );
+      })
+      .catch(error => {
+        if (isCancelled) return;
+
+        console.error(error);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [applyGameStatusSnapshot, refreshScoreBoard, queryState.gameId, selfPlayerId]);
+
+  useEffect(() => {
+    const gameId = queryState.gameId;
+    if (!isResultOpen || !gameId) return;
+
+    let isCancelled = false;
+
+    setIsSettlementLoading(true);
+    setResultActionError(null);
+
+    getSettlementResultData(gameId, selfPlayerId)
+      .then(resultData => {
+        if (isCancelled) return;
+
+        setSettlementResultData(resultData);
+      })
+      .catch(error => {
+        if (isCancelled) return;
+
+        setResultActionError(error instanceof Error ? error.message : '获取结算数据失败，请稍后再试');
+      })
+      .finally(() => {
+        if (!isCancelled) setIsSettlementLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isResultOpen, queryState.gameId, selfPlayerId]);
 
   const toggleDieLock = async (index: number) => {
     if (rollsLeft >= MAX_ROLLS_PER_TURN || isRolling) return;
 
     const nextLocked = locked.map((value, valueIndex) => (valueIndex === index ? !value : value));
     setLocked(nextLocked);
-    setGameEvents(prev => [
-      {
-        id: `lock-${index}-${Date.now()}`,
-        text: `${currentPlayerName} ${nextLocked[index] ? '保留' : '取消保留'}第 ${index + 1} 颗骰子（${dice[index]}点）。`,
-      },
-      ...prev,
-    ]);
-    await mockSyncLockedDice({ roomId, playerId: currentPlayerId, dice, locked: nextLocked });
+
+    if (!queryState.gameId) {
+      await mockSyncLockedDice({ roomId, playerId: activePlayerId, dice, locked: nextLocked });
+    }
+
+    setServerGameStatus(current => (current ? { ...current, diceLocked: nextLocked } : current));
+  };
+
+  const handleResetDiceLocks = async () => {
+    if (isRolling || rollsLeft >= MAX_ROLLS_PER_TURN || !locked.some(Boolean)) return;
+
+    setLocked(initialLocked);
+    setServerGameStatus(current => (current ? { ...current, diceLocked: initialLocked } : current));
   };
 
   const handleRollDice = async () => {
@@ -461,66 +710,158 @@ export default function GamePage() {
     setIsRolling(true);
 
     try {
-      const nextDice = await mockRollDice({ roomId, playerId: currentPlayerId, dice, locked });
-      const nextRollsLeft = rollsLeft - 1;
-      const nextPossibleScores = getPossibleScores(nextDice, completedCategories);
+      const rollPromise = queryState.gameId
+        ? rollGameDice(queryState.gameId, {
+            player_id: activePlayerId,
+            locked_dice: locked,
+          })
+        : mockRollDice({ roomId, playerId: activePlayerId, dice, locked }).then(nextDice => ({
+            dice: nextDice,
+            diceLocked: locked,
+            rollsLeft: rollsLeft - 1,
+          }));
+      const [rollResult] = await Promise.all([rollPromise, delay(DICE_THROW_ANIMATION_MS)]);
+      const nextDice = rollResult.dice;
+      const nextLocked =
+        rollResult.diceLocked && rollResult.diceLocked.length === initialLocked.length ? rollResult.diceLocked : locked;
+      const nextRollsLeft = rollResult.rollsLeft;
+      const nextPossibleScores = queryState.gameId ? await getPossibleScoreSnapshot(queryState.gameId) : {};
 
       setDice(nextDice);
+      setLocked(nextLocked);
       setRollsLeft(nextRollsLeft);
       setPossibleScores(nextPossibleScores);
-      setGameEvents(await mockFetchGameEvents(roomId, currentPlayerName, nextDice, nextPossibleScores, nextRollsLeft));
+      if (queryState.gameId) {
+        setServerGameStatus(current =>
+          current
+            ? {
+                ...current,
+                dice: nextDice,
+                diceLocked: nextLocked,
+                rollsLeft: nextRollsLeft,
+              }
+            : current
+        );
+      }
+    } catch (error) {
+      console.error(error);
     } finally {
       rollingGuardRef.current = false;
       setIsRolling(false);
     }
   };
 
+  const handleQuitGame = async () => {
+    if (!queryState.gameId) {
+      router.push('/');
+      return;
+    }
+
+    try {
+      await quitGame(queryState.gameId, {
+        player_id: selfPlayerId,
+      });
+      router.push('/');
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleSelectScore = async (category: ScoreCategory) => {
-    if (completedCategories.includes(category) || rollsLeft === MAX_ROLLS_PER_TURN || isRolling) return;
-
-    const score = await mockSelectScore({
-      roomId,
-      playerId: currentPlayerId,
-      category,
-      dice,
-      locked,
-    });
-
-    const nextCompletedCategories = [...completedCategories, category];
-    const nextPlayerScores = { ...playerScores, [category]: score };
-    const upperBonusAward = getUpperBonusAward(playerScores, nextPlayerScores);
-    const isGameComplete = nextCompletedCategories.length >= SCORE_CATEGORIES.length;
-    const scoreEvents: GameEventItem[] = [
-      {
-        id: `${category}-${Date.now()}`,
-        text: `${currentPlayerName} 选择「${CATEGORY_NAMES[category]}」计分，本项获得 ${score} 分。`,
-        score: `+${score}`,
-      },
-    ];
-
-    if (upperBonusAward > 0) {
-      scoreEvents.push({
-        id: `upper-bonus-${Date.now()}`,
-        text: `${currentPlayerName} 上层数字区达到 63 分，触发达标奖励。`,
-        score: `+${upperBonusAward}`,
-      });
+    if (
+      scoreSubmittingGuardRef.current ||
+      !queryState.gameId ||
+      completedCategories.includes(category) ||
+      !unlockedScoreCategories.includes(category) ||
+      playerScores[category] !== undefined ||
+      rollsLeft === MAX_ROLLS_PER_TURN ||
+      isRolling ||
+      isSubmittingScore
+    ) {
+      return;
     }
 
-    if (isGameComplete) {
-      scoreEvents.push({
-        id: `game-complete-${Date.now()}`,
-        text: '所有计分项已填写，本局进入结算。',
-        score: `${calculateGrandTotal(nextPlayerScores)}分`,
+    let submittedCategory = category;
+    let submittedScore = 0;
+    let nextCompletedCategories: ScoreCategory[] = [];
+    let isGameComplete = false;
+
+    scoreSubmittingGuardRef.current = true;
+    setIsSubmittingScore(true);
+
+    try {
+      const submitResult = await submitScoreItem(queryState.gameId, {
+        player_id: activePlayerId,
+        category,
       });
+      const nextTurnPlayerId = submitResult.nextPlayerId ?? activePlayerId;
+      const submittedPlayerScores = { ...playerScores, [submitResult.category]: submitResult.scoreValue };
+
+      submittedCategory = submitResult.category;
+      submittedScore = submitResult.scoreValue;
+      isGameComplete =
+        submitResult.isGameFinished ||
+        submitResult.gameStatus === 3 ||
+        Object.keys(submittedPlayerScores).length >= SCORE_CATEGORIES.length;
+
+      setServerGameStatus(current =>
+        current
+          ? {
+              ...current,
+              currentPlayer: nextTurnPlayerId,
+              dice: initialDice,
+              diceLocked: initialLocked,
+              rollsLeft: MAX_ROLLS_PER_TURN,
+              players: current.players.map(item =>
+                item.playerId === submitResult.playerId
+                  ? {
+                      ...item,
+                      scores: submittedPlayerScores,
+                      totalScore: submitResult.totalScore,
+                    }
+                  : item
+              ),
+            }
+          : current
+      );
+      setDice(initialDice);
+      setLocked(normalizeLockedDiceState(initialLocked));
+      setRollsLeft(MAX_ROLLS_PER_TURN);
+
+      try {
+        const nextLockStatus = await getScoreLockStatus(queryState.gameId, nextTurnPlayerId);
+        nextCompletedCategories = nextLockStatus.completedCategories;
+        applyScoreLockStatus(nextLockStatus);
+      } catch (syncError) {
+        console.error(syncError);
+        nextCompletedCategories = [...completedCategories, submittedCategory];
+        setCompletedCategories(nextCompletedCategories);
+        setPlayerScores(submittedPlayerScores);
+        setUnlockedScoreCategories(current => current.filter(item => item !== submittedCategory));
+      }
+    } catch (error) {
+      console.error(error);
+      return;
+    } finally {
+      scoreSubmittingGuardRef.current = false;
+      setIsSubmittingScore(false);
     }
 
-    setCompletedCategories(nextCompletedCategories);
-    setPlayerScores(nextPlayerScores);
     setPossibleScores({});
-    setRollsLeft(MAX_ROLLS_PER_TURN);
-    setDice(initialDice);
-    setLocked(initialLocked);
-    setGameEvents(prev => [...scoreEvents, ...prev]);
+    if (LOWER_CATEGORIES.includes(submittedCategory)) {
+      setGameEvents(prev => [
+        {
+          id: `${submittedCategory}-${Date.now()}`,
+          text: `${activePlayerName} 记录下区“${CATEGORY_NAMES[submittedCategory]}”`,
+          score: `+${submittedScore}`,
+        },
+        ...prev,
+      ]);
+    }
+
+    if (submittedCategory === 'yacht' && submittedScore > 0) {
+      setYachtEffectKey(Date.now());
+    }
 
     if (isGameComplete) {
       window.setTimeout(() => {
@@ -537,9 +878,10 @@ export default function GamePage() {
         stageClassName={styles.gameStage}
         backgroundImage={gameBackground.src}
       >
+        <YachtScoreEffect triggerKey={yachtEffectKey} />
         <header className={styles.topLayer}>
           <Link className={styles.logoArea} href="/" aria-label="返回投骰乐园首页">
-            <span className={styles.logoDice}>🎲</span>
+            <span className={styles.logoDice}>D6</span>
             <span>
               投骰乐园
               <small>DICE PARADISE</small>
@@ -548,7 +890,7 @@ export default function GamePage() {
 
           <div className={styles.statusPill}>
             <strong>对局中</strong>
-            <span>房间号：{roomId}</span>
+            <span>{queryState.gameId ? `对局号：${queryState.gameId}` : `房间号：${roomId}`}</span>
           </div>
 
           <nav className={styles.topActions} aria-label="对局工具">
@@ -556,11 +898,13 @@ export default function GamePage() {
               <Info size={22} />
               规则说明
             </button>
-            <button type="button" onClick={() => setIsSoundEnabled(value => !value)}>
-              {isSoundEnabled ? <Speaker size={23} /> : <VolumeX size={23} />}
-              {isSoundEnabled ? '音效开' : '音效关'}
-            </button>
-            <button className={styles.exitButton} type="button" onClick={() => router.push('/')}>
+            <SoundToggle
+              className={styles.soundToggleButton}
+              checked={isSoundEnabled}
+              onChange={setIsSoundEnabled}
+              ariaLabel={isSoundEnabled ? '关闭音效' : '开启音效'}
+            />
+            <button className={styles.exitButton} type="button" onClick={handleQuitGame}>
               <DoorOpen size={22} />
               退出本局
             </button>
@@ -574,14 +918,25 @@ export default function GamePage() {
 
         <aside className={styles.playerPanel} aria-label="玩家列表">
           {players.map(item => (
-            <PlayerCard key={item.id} player={item} />
+            <PlayerCard key={item.id} player={item} isActive={item.id === activePlayerId} />
           ))}
         </aside>
 
         <section className={styles.diceDock} aria-label="骰子操作区">
-          <div className={styles.rollCounter}>
-            <Dice5 size={23} />
-            剩余投掷次数：<strong>{rollsLeft}</strong>
+          <div className={styles.diceToolbar}>
+            <div className={styles.rollCounter}>
+              <Dice5 size={23} />
+              剩余投掷次数：<strong>{rollsLeft}</strong>
+            </div>
+            <button
+              className={styles.unlockAllButton}
+              type="button"
+              disabled={isRolling || rollsLeft >= MAX_ROLLS_PER_TURN || !locked.some(Boolean)}
+              onClick={handleResetDiceLocks}
+            >
+              <LockKeyhole size={18} />
+              全部解锁
+            </button>
           </div>
           <div className={styles.diceRow}>
             {dice.map((value, index) => (
@@ -611,7 +966,7 @@ export default function GamePage() {
             className={styles.chatPanel}
             ariaLabel="聊天消息"
             messages={gameChatMessages}
-            currentUserName={currentPlayerName}
+            currentUserName={selfPlayerName}
             currentUserAvatar={player?.avatar}
             placeholder="说点什么..."
             defaultHeight={300}
@@ -640,7 +995,9 @@ export default function GamePage() {
               const possibleScore = possibleScores[category];
               const isCompleted = completedCategories.includes(category);
               const hasPossibleScore = possibleScore !== undefined;
-              const disabled = isCompleted || rollsLeft === MAX_ROLLS_PER_TURN;
+              const isUnlocked = unlockedScoreCategories.includes(category);
+              const disabled =
+                isCompleted || !isUnlocked || rollsLeft === MAX_ROLLS_PER_TURN || isRolling || isSubmittingScore;
 
               return (
                 <button
@@ -660,27 +1017,35 @@ export default function GamePage() {
                     </strong>
                     <small>（{getCategoryHint(category)}）</small>
                   </div>
-                  {players.map((item, playerIndex) => (
-                    <span
-                      key={item.id}
-                      className={`${styles.scoreValue} ${
-                        playerIndex === 0 && isCompleted ? styles.scoreValueFilled : ''
-                      } ${playerIndex === 0 && !isCompleted && hasPossibleScore ? styles.scoreValuePossible : ''}`}
-                    >
-                      {playerIndex === 0 ? score ?? possibleScore ?? '-' : '-'}
-                    </span>
-                  ))}
+                  {players.map(item => {
+                    const isCurrentPlayerColumn = item.id === activePlayerId;
+                    const itemScores = isCurrentPlayerColumn ? playerScores : syncedScoresByPlayerId[item.id] ?? {};
+                    const itemScore = itemScores[category];
+
+                    return (
+                      <span
+                        key={item.id}
+                        className={`${styles.scoreValue} ${
+                          isCurrentPlayerColumn && isCompleted ? styles.scoreValueFilled : ''
+                        } ${
+                          isCurrentPlayerColumn && !isCompleted && hasPossibleScore ? styles.scoreValuePossible : ''
+                        }`}
+                      >
+                        {isCurrentPlayerColumn ? score ?? (hasPossibleScore ? possibleScore ?? 0 : '-') : itemScore ?? '-'}
+                      </span>
+                    );
+                  })}
                 </button>
               );
             })}
             <div className={styles.scoreRow}>
               <div className={styles.ruleCell}>
                 <span className={styles.sectionBadge}>总分</span>
-                <strong>⭐ 当前总分</strong>
+                <strong>★ 当前总分</strong>
               </div>
-              {players.map((item, playerIndex) => (
+              {players.map(item => (
                 <span key={item.id} className={styles.scoreValue}>
-                  {playerIndex === 0 ? calculateGrandTotal(playerScores) : '-'}
+                  {item.id === selfPlayerId ? currentTotalScore : item.score}
                 </span>
               ))}
             </div>
@@ -704,10 +1069,14 @@ export default function GamePage() {
 
       <GameResultModal
         open={isResultOpen}
-        result={gameResultData}
-        onClose={() => setIsResultOpen(false)}
-        onBackLobby={() => router.push('/')}
-        onReplay={() => setIsResultOpen(false)}
+        result={displayedResultData}
+        initialSelectedPlayerId={resultSelectedPlayerId}
+        loading={isSettlementLoading}
+        onBackLobby={handleBackLobbyFromResult}
+        onReplay={handleReplay}
+        backLoading={isReturningLobby}
+        replayLoading={isRematching}
+        actionError={resultActionError}
         onShare={() => undefined}
         onSave={() => undefined}
       />

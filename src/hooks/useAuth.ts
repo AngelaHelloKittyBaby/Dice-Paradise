@@ -1,38 +1,61 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
+import { loginWithNickname, registerWithNickname } from '@/modules/auth/authApi';
 import { usePlayerStore } from '@/stores/playerStore';
 
 export function useAuth() {
-  const store = usePlayerStore();
+  const player = usePlayerStore(state => state.player);
+  const stats = usePlayerStore(state => state.stats);
+  const isLoggedIn = usePlayerStore(state => state.isLoggedIn);
+  const settings = usePlayerStore(state => state.settings);
+  const storeLogin = usePlayerStore(state => state.login);
+  const storeLogout = usePlayerStore(state => state.logout);
+  const updateSettings = usePlayerStore(state => state.updateSettings);
+  const addCoins = usePlayerStore(state => state.addCoins);
+  const addGems = usePlayerStore(state => state.addGems);
+  const addExp = usePlayerStore(state => state.addExp);
 
-  const login = useCallback((username: string, password: string) => {
-    // Mock login - 实际项目中调用API
-    console.log('Login:', username, password);
-    // store.login(mockPlayer);
-  }, []);
+  const login = useCallback(async (nickname: string, password: string) => {
+    const session = await loginWithNickname({ nickname, password });
+
+    storeLogin(session.player, {
+      authToken: session.accessToken,
+      tokenType: session.tokenType,
+      stats: session.stats,
+    });
+
+    return session;
+  }, [storeLogin]);
 
   const logout = useCallback(() => {
-    store.logout();
-  }, [store]);
+    storeLogout();
+  }, [storeLogout]);
 
-  const register = useCallback((username: string, password: string, nickname?: string) => {
-    // Mock register - 实际项目中调用API
-    console.log('Register:', username, password, nickname);
-  }, []);
+  const register = useCallback(async (nickname: string, password: string) => {
+    const session = await registerWithNickname({ nickname, password });
+
+    storeLogin(session.player, {
+      authToken: session.accessToken,
+      tokenType: session.tokenType,
+      stats: session.stats,
+    });
+
+    return session;
+  }, [storeLogin]);
 
   return {
     // State
-    player: store.player,
-    stats: store.stats,
-    isLoggedIn: store.isLoggedIn,
-    settings: store.settings,
+    player,
+    stats,
+    isLoggedIn,
+    settings,
 
     // Actions
     login,
     logout,
     register,
-    updateSettings: store.updateSettings,
-    addCoins: store.addCoins,
-    addGems: store.addGems,
-    addExp: store.addExp,
+    updateSettings,
+    addCoins,
+    addGems,
+    addExp,
   };
 }

@@ -1,18 +1,21 @@
 import { create } from 'zustand';
-import type { Room, RoomMember, RoomSettings } from '@/types/room';
-import { mockCurrentRoom, mockRoomList } from '@/mocks';
+import { createOnlineRoom, dismissOnlineRoom, getWaitingRoomList, joinOnlineRoom, leaveOnlineRoom } from '@/modules/room/roomApi';
+import type { Room, RoomListItem, RoomMember, RoomSettings } from '@/types/room';
+import { usePlayerStore } from './playerStore';
 
 interface RoomState {
   currentRoom: Room | null;
-  roomList: typeof mockRoomList;
+  roomList: RoomListItem[];
   isHost: boolean;
+  currentPlayerId: string;
 }
 
 interface RoomActions {
-  setCurrentRoom: (room: Room | null) => void;
-  createRoom: (name: string, settings: RoomSettings) => void;
-  joinRoom: (roomId: string) => boolean;
-  leaveRoom: () => void;
+  setCurrentRoom: (room: Room | null, currentPlayerId?: string) => void;
+  createRoom: (name: string, settings: RoomSettings, playerName?: string) => Promise<Room>;
+  joinRoom: (roomCode: string, playerName?: string) => Promise<Room>;
+  fetchRoomList: () => Promise<RoomListItem[]>;
+  leaveRoom: () => Promise<void>;
   toggleReady: () => void;
   startGame: () => boolean;
   updateRoomMembers: (members: RoomMember[]) => void;
@@ -20,110 +23,125 @@ interface RoomActions {
 
 type RoomStore = RoomState & RoomActions;
 
+function getRoomListItem(room: Room): RoomListItem {
+  return {
+    id: room.id,
+    name: room.name,
+    hostName: room.members.find(member => member.isHost)?.name ?? '房主',
+    playerCount: room.members.length,
+    maxPlayers: room.settings.maxPlayers,
+    isPrivate: room.settings.isPrivate,
+    status: room.status,
+  };
+}
+
+function getCurrentClientId() {
+  const player = usePlayerStore.getState().player;
+
+  if (!player?.id) {
+    throw new Error('请先登录后再操作房间');
+  }
+
+  return player.id;
+}
+
 export const useRoomStore = create<RoomStore>((set, get) => ({
   // State
-  currentRoom: mockCurrentRoom,
-  roomList: mockRoomList,
-  isHost: true, // Mock: 默认是房主
+  currentRoom: null,
+  roomList: [],
+  isHost: false,
+  currentPlayerId: '',
 
   // Actions
-  setCurrentRoom: (room) => set({ currentRoom: room }),
+  setCurrentRoom: (room, currentPlayerId) =>
+    set({
+      currentRoom: room,
+      currentPlayerId: currentPlayerId ?? get().currentPlayerId,
+      isHost: Boolean(room?.members.find(member => member.playerId === (currentPlayerId ?? get().currentPlayerId))?.isHost),
+    }),
 
-  createRoom: (name, settings) => {
-    const newRoom: Room = {
-      id: `room-${Date.now()}`,
-      name,
-      hostId: 'player-001', // Mock current player id
-      members: [
-        {
-          playerId: 'player-001',
-          name: '投骰大师',
-          avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix',
-          isHost: true,
-          isReady: true,
-          joinedAt: new Date().toISOString(),
-        },
-      ],
-      settings,
-      status: 'waiting',
-      createdAt: new Date().toISOString(),
-    };
+  createRoom: async (name, settings, playerName = '投骰大师') => {
+    const newRoom = await createOnlineRoom({
+      client_id: getCurrentClientId(),
+      player_name: playerName,
+      room_name: name,
+      max_players: settings.maxPlayers,
+      game_mode: 'online',
+    });
+    const currentPlayerId = newRoom.hostId;
 
     set({
       currentRoom: newRoom,
       isHost: true,
-      roomList: [
-        {
-          id: newRoom.id,
-          name: newRoom.name,
-          hostName: '投骰大师',
-          playerCount: 1,
-          maxPlayers: settings.maxPlayers,
-          isPrivate: settings.isPrivate,
-          status: 'waiting',
-        },
-        ...get().roomList,
-      ],
+      currentPlayerId,
+      roomList: [getRoomListItem(newRoom), ...get().roomList.filter(room => room.id !== newRoom.id)],
     });
+
+    return newRoom;
   },
 
-  joinRoom: (roomId) => {
-    const { roomList } = get();
-    const room = roomList.find((r) => r.id === roomId);
-    if (!room || room.status !== 'waiting' || room.playerCount >= room.maxPlayers) {
-      return false;
+  joinRoom: async (roomCode, playerName = '乐乐玩家') => {
+    const joinResult = await joinOnlineRoom({
+      client_id: getCurrentClientId(),
+      room_code: roomCode,
+      player_name: playerName,
+    });
+    const joinedRoom = joinResult.room;
+    const currentPlayerId = joinResult.playerId;
+
+    set({
+      currentRoom: joinedRoom,
+      currentPlayerId,
+      isHost: Boolean(joinedRoom.members.find(member => member.playerId === currentPlayerId)?.isHost),
+      roomList: [getRoomListItem(joinedRoom), ...get().roomList.filter(room => room.id !== joinedRoom.id)],
+    });
+
+    return joinedRoom;
+  },
+
+  fetchRoomList: async () => {
+    const roomList = await getWaitingRoomList();
+
+    set({ roomList });
+
+    return roomList;
+  },
+
+  leaveRoom: async () => {
+    const { currentRoom, currentPlayerId } = get();
+
+    if (!currentRoom || !currentPlayerId) return;
+
+    const shouldDismissRoom = Boolean(currentRoom.members.find(member => member.playerId === currentPlayerId)?.isHost);
+
+    if (shouldDismissRoom) {
+      await dismissOnlineRoom(currentRoom.id, {
+        player_id: currentPlayerId,
+      });
+    } else {
+      await leaveOnlineRoom({
+        room_code: currentRoom.id,
+        player_id: currentPlayerId,
+      });
     }
 
-    // Mock: 模拟加入房间
     set({
-      currentRoom: {
-        id: room.id,
-        name: room.name,
-        hostId: 'player-002',
-        members: [
-          {
-            playerId: 'player-002',
-            name: '骰子达人',
-            avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Aneka',
-            isHost: true,
-            isReady: true,
-            joinedAt: new Date().toISOString(),
-          },
-          {
-            playerId: 'player-001',
-            name: '投骰大师',
-            avatar: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix',
-            isHost: false,
-            isReady: false,
-            joinedAt: new Date().toISOString(),
-          },
-        ],
-        settings: {
-          maxPlayers: room.maxPlayers,
-          isPrivate: room.isPrivate,
-          roundTime: 30,
-          autoStart: false,
-        },
-        status: 'waiting',
-        createdAt: new Date().toISOString(),
-      },
+      currentRoom: null,
       isHost: false,
+      currentPlayerId: '',
+      roomList: shouldDismissRoom ? get().roomList.filter(room => room.id !== currentRoom.id) : get().roomList,
     });
-
-    return true;
   },
 
-  leaveRoom: () => set({ currentRoom: null, isHost: false }),
-
   toggleReady: () => {
-    const { currentRoom, isHost } = get();
+    const { currentRoom, currentPlayerId, isHost } = get();
     if (!currentRoom || isHost) return;
 
-    const myMember = currentRoom.members.find((m) => m.playerId === 'player-001');
+    const myMember = currentRoom.members.find((m) => m.playerId === currentPlayerId);
     if (!myMember) return;
 
     const updatedMembers = currentRoom.members.map((m) =>
-      m.playerId === 'player-001' ? { ...m, isReady: !m.isReady } : m
+      m.playerId === currentPlayerId ? { ...m, isReady: !m.isReady } : m
     );
 
     set({

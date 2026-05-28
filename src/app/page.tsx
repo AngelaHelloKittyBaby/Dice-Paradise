@@ -1,6 +1,7 @@
-'use client';
+﻿'use client';
 
-import { useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import Image, { type StaticImageData } from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
@@ -8,17 +9,23 @@ import {
   Anchor,
   Bot,
   CalendarCheck,
+  ChevronRight,
   Crown,
   Dice5,
   Gift,
   Home,
+  LogIn,
   Palette,
+  PlusCircle,
   Rocket,
   Settings,
+  ShieldCheck,
   Sparkles,
   Trophy,
   User,
   Volume2,
+  X,
+  Zap,
 } from 'lucide-react';
 import lobbyBackground from '@/assets/images/backgrounds/lobby/lobby-bg.png';
 import activeBackground from '@/assets/images/ui/buttons/active.png';
@@ -26,9 +33,17 @@ import beganGameBackground from '@/assets/images/ui/buttons/begangame.png';
 import beganRebotBackground from '@/assets/images/ui/buttons/beganrebot.png';
 import beganRoomBackground from '@/assets/images/ui/buttons/beganroom.png';
 import defaultAvatar from '@/assets/images/avatars/default-player.png';
+import aiBattlePanelImage from '@/assets/images/ui/panels/Player vs AI.png';
+import deepseekImage from '@/assets/images/ui/panels/deepseek.png';
+import doubaoImage from '@/assets/images/ui/panels/doubao.png';
+import kimiImage from '@/assets/images/ui/panels/kimi.png';
 import { LobbyAmbientEffects, ResponsiveStage } from '@/components/layout';
-import { GameChat, StarIcon, type GameChatMessage } from '@/components/ui';
-import { usePlayerStore } from '@/stores';
+import { GameChat, SoundToggle, StarIcon, type GameChatMessage } from '@/components/ui';
+import { JoinRoomModal, RoomHallModal } from '@/components/game';
+import { useHomePoints, useHomeSoundSetting } from '@/hooks';
+import { createGame } from '@/modules/game/gameApi';
+import { usePlayerStore, useRoomStore } from '@/stores';
+import type { ApiGameMode } from '@/types/gameApi';
 import styles from './home-lobby.module.css';
 
 interface ActionCard {
@@ -38,6 +53,25 @@ interface ActionCard {
   modifier: string;
   icon: LucideIcon;
   backgroundImage: string;
+  createMode?: ApiGameMode;
+  opensAiMode?: boolean;
+  createsRoom?: boolean;
+}
+
+type AiDifficulty = 'normal' | 'easy' | 'hard';
+type RoomDialogMode = 'choose' | 'join';
+
+const roomNumberLabel = 'Room number'.split('');
+
+interface AiDifficultyOption {
+  value: AiDifficulty;
+  title: string;
+  badge: string;
+  description: string;
+  icon: LucideIcon;
+  modifier: string;
+  image: StaticImageData;
+  stars: number;
 }
 
 interface LeaderboardEntry {
@@ -59,11 +93,12 @@ interface DailyTask {
 const actionCards: ActionCard[] = [
   {
     title: '开始游戏',
-    subtitle: '快速匹配对手',
+    subtitle: '单人模式',
     href: '/game?mode=single',
     modifier: styles.startGame,
     icon: Anchor,
     backgroundImage: beganGameBackground.src,
+    createMode: 'local',
   },
   {
     title: '开房间',
@@ -72,6 +107,7 @@ const actionCards: ActionCard[] = [
     modifier: styles.createRoom,
     icon: Home,
     backgroundImage: beganRoomBackground.src,
+    createsRoom: true,
   },
   {
     title: '人机对战',
@@ -80,6 +116,7 @@ const actionCards: ActionCard[] = [
     modifier: styles.botBattle,
     icon: Bot,
     backgroundImage: beganRebotBackground.src,
+    opensAiMode: true,
   },
   {
     title: '活动',
@@ -88,6 +125,39 @@ const actionCards: ActionCard[] = [
     modifier: styles.events,
     icon: Gift,
     backgroundImage: activeBackground.src,
+  },
+];
+
+const aiDifficultyOptions: AiDifficultyOption[] = [
+  {
+    value: 'easy',
+    title: '豆包',
+    badge: '简单',
+    description: '轻松对战，快乐相伴',
+    icon: ShieldCheck,
+    modifier: styles.aiBattleEasy,
+    image: doubaoImage,
+    stars: 1,
+  },
+  {
+    value: 'normal',
+    title: 'Kimi',
+    badge: '普通',
+    description: '实力均衡，策略为王',
+    icon: Bot,
+    modifier: styles.aiBattleNormal,
+    image: kimiImage,
+    stars: 2,
+  },
+  {
+    value: 'hard',
+    title: 'deepseek',
+    badge: '困难',
+    description: '强大对手，极限挑战',
+    icon: Zap,
+    modifier: styles.aiBattleHard,
+    image: deepseekImage,
+    stars: 3,
   },
 ];
 
@@ -153,14 +223,43 @@ export default function HomePage() {
   const router = useRouter();
   const player = usePlayerStore(state => state.player);
   const isLoggedIn = usePlayerStore(state => state.isLoggedIn);
+  const soundSettingFallback = usePlayerStore(state => state.settings.soundEnabled);
+  const createRoom = useRoomStore(state => state.createRoom);
+  const fetchRoomList = useRoomStore(state => state.fetchRoomList);
+  const joinRoom = useRoomStore(state => state.joinRoom);
+  const roomList = useRoomStore(state => state.roomList);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
+  const [isAiModeOpen, setIsAiModeOpen] = useState(false);
+  const [isRoomHallOpen, setIsRoomHallOpen] = useState(false);
+  const [isJoinRoomModalOpen, setIsJoinRoomModalOpen] = useState(false);
+  const [isRoomModeOpen, setIsRoomModeOpen] = useState(false);
+  const [roomDialogMode, setRoomDialogMode] = useState<RoomDialogMode>('choose');
+  const [joinRoomCode, setJoinRoomCode] = useState('');
+  const [creatingGameMode, setCreatingGameMode] = useState<ApiGameMode | null>(null);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
+  const [isFetchingRoomList, setIsFetchingRoomList] = useState(false);
+  const [gameCreateError, setGameCreateError] = useState<string | null>(null);
 
-  const playerName = player?.name ?? '乐乐玩家';
+  const playerName = player?.name ?? '涔愪箰鐜╁';
   const playerLevel = player?.level ?? 28;
   const playerStars = player?.gems ?? 12560;
-  const topStars = player?.coins ?? 23560;
+  const fallbackTopStars = player?.coins ?? 23560;
+  const { points: topStars } = useHomePoints(player?.id, fallbackTopStars);
+  const { soundEnabled: isSoundEnabled, setSoundEnabled: setIsSoundEnabled } = useHomeSoundSetting(
+    player?.id,
+    soundSettingFallback
+  );
   const hasUserSession = Boolean(isLoggedIn && player);
   const playerAvatar = hasUserSession && player?.avatar ? player.avatar : defaultAvatar.src;
+
+  useEffect(() => {
+    router.prefetch('/game');
+    router.prefetch('/room');
+    router.prefetch('/activity');
+    router.prefetch('/leaderboard');
+    router.prefetch('/profile');
+  }, [router]);
 
   const handlePlayerProfileClick = () => {
     if (hasUserSession) {
@@ -186,6 +285,168 @@ export default function HomePage() {
     router.push('/login?mode=register');
   };
 
+  const createGameAndEnter = async (
+    gameMode: ApiGameMode,
+    playerNames: string[],
+    extraParams: Record<string, string> = {}
+  ) => {
+    if (creatingGameMode) return;
+
+    setCreatingGameMode(gameMode);
+    setGameCreateError(null);
+
+    try {
+      const game = await createGame({
+        game_mode: gameMode,
+        player_names: playerNames,
+      });
+      const params = new URLSearchParams({
+        mode: gameMode,
+        gameId: game.gameId,
+        playerId: game.playerId,
+        ...extraParams,
+      });
+
+      router.push(`/game?${params.toString()}`);
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '游戏创建失败，请稍后再试');
+    } finally {
+      setCreatingGameMode(null);
+    }
+  };
+
+  const handleLocalGameStart = () => {
+    void createGameAndEnter('local', [playerName]);
+  };
+
+  const handleAiDifficultySelect = (difficulty: AiDifficulty) => {
+    void createGameAndEnter('ai', [playerName, 'AI机器人'], { difficulty });
+  };
+
+  const refreshWaitingRoomList = async () => {
+    setIsFetchingRoomList(true);
+
+    try {
+      await fetchRoomList();
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '房间列表获取失败，请稍后再试');
+    } finally {
+      setIsFetchingRoomList(false);
+    }
+  };
+
+  const openRoomModeDialog = () => {
+    if (creatingGameMode || isCreatingRoom || isJoiningRoom) return;
+
+    if (!hasUserSession) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+
+    setGameCreateError(null);
+    setRoomDialogMode('choose');
+    setJoinRoomCode('');
+    setIsJoinRoomModalOpen(false);
+    setIsRoomHallOpen(true);
+    void refreshWaitingRoomList();
+  };
+
+  const closeRoomModeDialog = () => {
+    if (isCreatingRoom || isJoiningRoom) return;
+
+    setIsRoomHallOpen(false);
+    setIsJoinRoomModalOpen(false);
+    setIsRoomModeOpen(false);
+    setRoomDialogMode('choose');
+    setJoinRoomCode('');
+  };
+
+  const handleCreateRoom = async () => {
+    if (isCreatingRoom || isJoiningRoom || creatingGameMode) return;
+
+    if (!hasUserSession) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+
+    setIsCreatingRoom(true);
+    setGameCreateError(null);
+
+    try {
+      await createRoom(`${playerName}的房间`, {
+        maxPlayers: 4,
+        isPrivate: false,
+        roundTime: 30,
+        autoStart: false,
+      }, playerName);
+      setIsRoomHallOpen(false);
+      router.push('/room');
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '房间创建失败，请稍后再试');
+    } finally {
+      setIsCreatingRoom(false);
+    }
+  };
+
+  const handleJoinRoom = async () => {
+    const normalizedRoomCode = joinRoomCode.trim();
+    if (!normalizedRoomCode || isJoiningRoom || isCreatingRoom || creatingGameMode) return;
+
+    if (!hasUserSession) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+
+    setIsJoiningRoom(true);
+    setGameCreateError(null);
+
+    try {
+      await joinRoom(normalizedRoomCode, playerName);
+      setIsRoomHallOpen(false);
+      setIsJoinRoomModalOpen(false);
+      setJoinRoomCode('');
+      router.push('/room');
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '加入房间失败，请稍后再试');
+    } finally {
+      setIsJoiningRoom(false);
+    }
+  };
+
+  const handleJoinWaitingRoom = async (roomCode: string) => {
+    if (!roomCode || isJoiningRoom || isCreatingRoom || creatingGameMode) return;
+
+    if (!hasUserSession) {
+      setIsAuthPromptOpen(true);
+      return;
+    }
+
+    setJoinRoomCode(roomCode);
+    setIsJoiningRoom(true);
+    setGameCreateError(null);
+
+    try {
+      await joinRoom(roomCode, playerName);
+      setIsRoomHallOpen(false);
+      setIsJoinRoomModalOpen(false);
+      setJoinRoomCode('');
+      router.push('/room');
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '加入房间失败，请稍后再试');
+    } finally {
+      setIsJoiningRoom(false);
+    }
+  };
+
+  const handleRoomHallJoin = () => {
+    setIsRoomHallOpen(false);
+    setIsRoomModeOpen(false);
+    setRoomDialogMode('join');
+    setGameCreateError(null);
+    setIsJoinRoomModalOpen(true);
+    void refreshWaitingRoomList();
+  };
+
   return (
     <ResponsiveStage
       className={styles.gameLobbyPage}
@@ -206,7 +467,7 @@ export default function HomePage() {
         >
           <span
             className={styles.avatarSlot}
-            aria-label={`${playerName}头像`}
+            aria-label={`${playerName}澶村儚`}
             style={{ backgroundImage: `url(${playerAvatar})` }}
           />
           <div className={styles.playerInfo}>
@@ -232,18 +493,26 @@ export default function HomePage() {
         <div className={styles.headerNotice}>
           <Volume2 size={19} fill="currentColor" />
           <span className={styles.noticeViewport}>
-            <span className={styles.noticeMarqueeText}>欢迎来到投骰乐园！</span>
+            <span className={styles.noticeMarqueeText}>
+              <span>欢迎来到投骰乐园！</span>
+              <span aria-hidden="true">欢迎来到投骰乐园！</span>
+            </span>
           </span>
         </div>
 
         <section className={styles.headerTools} aria-label="顶部工具栏">
+          <SoundToggle
+            checked={isSoundEnabled}
+            onChange={setIsSoundEnabled}
+            ariaLabel={isSoundEnabled ? '关闭音效' : '开启音效'}
+          />
           <div className={styles.currencyPill}>
             <span className={styles.rewardIconSlot} aria-hidden="true">
               <StarIcon size={25} />
             </span>
             <strong>{topStars.toLocaleString()}</strong>
           </div>
-          <button className={styles.toolButton} type="button" aria-label="设置">
+          <button className={styles.toolButton} type="button" aria-label="璁剧疆">
             <Settings size={30} />
           </button>
         </section>
@@ -276,6 +545,211 @@ export default function HomePage() {
               </button>
             </div>
           </section>
+        </div>
+      )}
+      {isAiModeOpen && (
+        <div
+          className={styles.aiModeOverlay}
+          role="presentation"
+          onClick={() => setIsAiModeOpen(false)}
+        >
+          <section
+            className={styles.aiBattleDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-mode-title"
+            onClick={event => event.stopPropagation()}
+          >
+            <Image src={aiBattlePanelImage} alt="" fill sizes="1260px" className={styles.aiBattlePanelImage} priority />
+            <h2 id="ai-mode-title" className={styles.aiBattleTitle}>人机对战</h2>
+            <p className={styles.aiBattleSubtitle}>选择你的AI对手，开始挑战吧！</p>
+
+            <button
+              className={styles.aiBattleCloseHotspot}
+              type="button"
+              aria-label="关闭人机对战"
+              onClick={() => setIsAiModeOpen(false)}
+            />
+
+            <div className={styles.aiBattleGrid}>
+              {aiDifficultyOptions.map(option => {
+                const isCreatingAiGame = creatingGameMode === 'ai';
+
+                return (
+                  <button
+                    key={option.value}
+                    className={`${styles.aiBattleCard} ${option.modifier}`}
+                    type="button"
+                    disabled={Boolean(creatingGameMode || isCreatingRoom || isJoiningRoom)}
+                    onClick={() => handleAiDifficultySelect(option.value)}
+                  >
+                    <span className={styles.aiBattleBadge}>{option.badge}</span>
+                    <span className={styles.aiBattlePortrait}>
+                      <Image src={option.image} alt="" fill sizes="330px" className={styles.aiBattlePortraitImage} priority />
+                    </span>
+                    <span className={styles.aiBattleInfo}>
+                      <strong>{option.title}</strong>
+                      <span>{option.description}</span>
+                      <span className={styles.aiBattleStars} aria-label={`${option.stars}星难度`}>
+                        {[0, 1, 2].map(starIndex => (
+                          <span key={starIndex} className={starIndex < option.stars ? styles.aiBattleStarActive : styles.aiBattleStarEmpty}>
+                            ★
+                          </span>
+                        ))}
+                      </span>
+                      {isCreatingAiGame && <small>创建中</small>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {gameCreateError && <p className={styles.aiModeError}>{gameCreateError}</p>}
+          </section>
+        </div>
+      )}
+      <RoomHallModal
+        isOpen={isRoomHallOpen}
+        onClose={closeRoomModeDialog}
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleRoomHallJoin}
+        isLoading={isCreatingRoom || isJoiningRoom}
+        waitingRoomCount={roomList.length}
+      />
+
+      <JoinRoomModal
+        isOpen={isJoinRoomModalOpen}
+        joinRoomCode={joinRoomCode}
+        roomNumberLabel={roomNumberLabel}
+        isLoading={isJoiningRoom}
+        isRoomListLoading={isFetchingRoomList}
+        error={gameCreateError}
+        rooms={roomList}
+        onRoomCodeChange={setJoinRoomCode}
+        onClose={closeRoomModeDialog}
+        onSubmit={handleJoinRoom}
+        onJoinRoom={handleJoinWaitingRoom}
+        onRefreshRooms={() => void refreshWaitingRoomList()}
+      />
+
+      {isRoomModeOpen && (
+        <div className={styles.roomModeOverlay} role="presentation" onClick={closeRoomModeDialog}>
+          <section
+            className={styles.roomModeDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="room-mode-title"
+            onClick={event => event.stopPropagation()}
+          >
+            <button
+              className={styles.aiModeClose}
+              type="button"
+              aria-label="关闭房间选择"
+              onClick={closeRoomModeDialog}
+            >
+              <X size={22} strokeWidth={3} />
+            </button>
+
+            <div className={styles.aiModeHeader}>
+              <span className={`${styles.aiModeMascot} ${styles.roomModeMascot}`} aria-hidden="true">
+                <Home size={38} strokeWidth={2.8} />
+                <Sparkles size={16} strokeWidth={3} />
+              </span>
+              <div>
+                <span className={styles.aiModeEyebrow}>
+                  <Crown size={17} fill="currentColor" strokeWidth={2.6} />
+                  联机房间
+                </span>
+                <h2 id="room-mode-title">{roomDialogMode === 'choose' ? '选择房间方式' : '输入房间号'}</h2>
+                <p>{roomDialogMode === 'choose' ? '创建新房间，或输入房间号加入已有房间。' : '输入好友分享的房间号，确认后进入等待房间。'}</p>
+              </div>
+            </div>
+
+            {roomDialogMode === 'choose' ? (
+              <div className={styles.roomModeGrid}>
+                <button
+                  className={`${styles.aiModeCard} ${styles.roomCreateCard}`}
+                  type="button"
+                  disabled={isCreatingRoom || isJoiningRoom}
+                  onClick={handleCreateRoom}
+                >
+                  <span className={styles.aiModeBadge}>房主</span>
+                  <span className={styles.aiModeIcon} aria-hidden="true">
+                    <PlusCircle size={34} strokeWidth={2.8} />
+                  </span>
+                  <strong>创建房间</strong>
+                  <span>自动生成联机房间号，进入房间后等待其他玩家加入。</span>
+                  <small>
+                    {isCreatingRoom ? '创建中' : '立即创建'}
+                    <ChevronRight size={16} strokeWidth={3} />
+                  </small>
+                </button>
+
+                <button
+                  className={`${styles.aiModeCard} ${styles.roomJoinCard}`}
+                  type="button"
+                  disabled={isCreatingRoom || isJoiningRoom}
+                  onClick={() => {
+                    setGameCreateError(null);
+                    setRoomDialogMode('join');
+                  }}
+                >
+                  <span className={styles.aiModeBadge}>加入</span>
+                  <span className={styles.aiModeIcon} aria-hidden="true">
+                    <LogIn size={34} strokeWidth={2.8} />
+                  </span>
+                  <strong>加入房间</strong>
+                  <span>输入房间号搜索并加入已经创建好的联机房间。</span>
+                  <small>
+                    输入房间号
+                    <ChevronRight size={16} strokeWidth={3} />
+                  </small>
+                </button>
+              </div>
+            ) : (
+              <form
+                className={styles.roomJoinForm}
+                onSubmit={event => {
+                  event.preventDefault();
+                  void handleJoinRoom();
+                }}
+              >
+                <div className={styles.roomSearchBox}>
+                  <input
+                    id="room-code-input"
+                    type="text"
+                    required
+                    value={joinRoomCode}
+                    disabled={isJoiningRoom}
+                    onChange={event => setJoinRoomCode(event.target.value)}
+                  />
+                  <label htmlFor="room-code-input" aria-label="Room number">
+                    {roomNumberLabel.map((character, index) => (
+                      <span key={`${character}-${index}`} style={{ transitionDelay: `${index * 50}ms` }}>
+                        {character === ' ' ? '\u00A0' : character}
+                      </span>
+                    ))}
+                  </label>
+                </div>
+                <div className={styles.roomJoinActions}>
+                  <button type="button" onClick={() => setRoomDialogMode('choose')} disabled={isJoiningRoom}>
+                    返回
+                  </button>
+                  <button type="submit" disabled={!joinRoomCode.trim() || isJoiningRoom}>
+                    {isJoiningRoom ? '加入中' : '确认加入'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {gameCreateError && <p className={styles.aiModeError}>{gameCreateError}</p>}
+          </section>
+        </div>
+      )}
+
+      {gameCreateError && !isAiModeOpen && !isJoinRoomModalOpen && !isRoomModeOpen && (
+        <div className={styles.gameCreateToast} role="alert">
+          {gameCreateError}
         </div>
       )}
 
@@ -313,14 +787,8 @@ export default function HomePage() {
           const actionCardStyle = {
             '--action-bg': `url(${card.backgroundImage})`,
           } as CSSProperties;
-
-          return (
-            <Link
-              key={card.title}
-              href={card.href}
-              className={`${styles.actionCard} ${card.modifier}`}
-              style={actionCardStyle}
-            >
+          const cardContent = (
+            <>
               <span className={styles.primaryTag}>主按钮</span>
               <div className={styles.actionCopy}>
                 <h2>{card.title}</h2>
@@ -329,6 +797,53 @@ export default function HomePage() {
               <span className={styles.actionIconSlot} aria-hidden="true">
                 <Icon size={38} strokeWidth={2.7} />
               </span>
+            </>
+          );
+
+          if (card.opensAiMode || card.createMode || card.createsRoom) {
+            const isCreatingThisMode = card.createsRoom
+              ? isCreatingRoom
+              : card.createMode
+                ? creatingGameMode === card.createMode
+                : creatingGameMode === 'ai';
+
+            return (
+              <button
+                key={card.title}
+                type="button"
+                className={`${styles.actionCard} ${card.modifier}`}
+                style={actionCardStyle}
+                aria-haspopup={card.opensAiMode ? 'dialog' : undefined}
+                aria-expanded={card.opensAiMode ? isAiModeOpen : undefined}
+                disabled={Boolean(creatingGameMode || isCreatingRoom || isJoiningRoom)}
+                onClick={card.opensAiMode ? () => setIsAiModeOpen(true) : card.createsRoom ? openRoomModeDialog : handleLocalGameStart}
+              >
+                {isCreatingThisMode ? (
+                  <>
+                    <span className={styles.primaryTag}>创建中</span>
+                    <div className={styles.actionCopy}>
+                      <h2>{card.title}</h2>
+                      <p>{card.createsRoom ? '正在创建房间' : '正在创建对局'}</p>
+                    </div>
+                    <span className={styles.actionIconSlot} aria-hidden="true">
+                      <Icon size={38} strokeWidth={2.7} />
+                    </span>
+                  </>
+                ) : (
+                  cardContent
+                )}
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={card.title}
+              href={card.href}
+              className={`${styles.actionCard} ${card.modifier}`}
+              style={actionCardStyle}
+            >
+              {cardContent}
             </Link>
           );
         })}

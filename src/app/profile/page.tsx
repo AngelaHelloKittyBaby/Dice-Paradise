@@ -156,7 +156,11 @@ export default function ProfilePage() {
       <GameResultModal
         open={Boolean(selectedRecord)}
         result={resultData}
+        initialSelectedPlayerId={1}
         onClose={() => setSelectedRecord(null)}
+        allowOverlayDismiss
+        showActions={false}
+        showAutoSave={false}
       />
     </ResponsiveStage>
   );

@@ -4,50 +4,65 @@ import type { RoomSettings } from '@/types/room';
 
 export function useRoom() {
   const store = useRoomStore();
+  const {
+    createRoom: createRoomAction,
+    joinRoom: joinRoomAction,
+    fetchRoomList: fetchRoomListAction,
+    leaveRoom: leaveRoomAction,
+    toggleReady: toggleReadyAction,
+    startGame: startGameAction,
+    currentRoom,
+    roomList,
+    isHost,
+    currentPlayerId,
+  } = store;
 
-  const createRoom = useCallback((name: string, settings: RoomSettings) => {
-    store.createRoom(name, settings);
-  }, [store]);
+  const createRoom = useCallback((name: string, settings: RoomSettings, playerName?: string) => {
+    return createRoomAction(name, settings, playerName);
+  }, [createRoomAction]);
 
-  const joinRoom = useCallback((roomId: string) => {
-    return store.joinRoom(roomId);
-  }, [store]);
+  const joinRoom = useCallback((roomId: string, playerName?: string) => {
+    return joinRoomAction(roomId, playerName);
+  }, [joinRoomAction]);
+
+  const fetchRoomList = useCallback(() => {
+    return fetchRoomListAction();
+  }, [fetchRoomListAction]);
 
   const leaveRoom = useCallback(() => {
-    store.leaveRoom();
-  }, [store]);
+    return leaveRoomAction();
+  }, [leaveRoomAction]);
 
   const toggleReady = useCallback(() => {
-    store.toggleReady();
-  }, [store]);
+    toggleReadyAction();
+  }, [toggleReadyAction]);
 
   const startGame = useCallback(() => {
-    return store.startGame();
-  }, [store]);
+    return startGameAction();
+  }, [startGameAction]);
 
   const canStartGame = useMemo(() => {
-    const { currentRoom, isHost } = store;
     if (!currentRoom || !isHost) return false;
 
     const allReady = currentRoom.members.every((m) => m.isHost || m.isReady);
     const enoughPlayers = currentRoom.members.length >= 2;
 
     return allReady && enoughPlayers;
-  }, [store.currentRoom, store.isHost]);
+  }, [currentRoom, isHost]);
 
   const amIReady = useMemo(() => {
-    const { currentRoom, isHost } = store;
     if (!currentRoom || isHost) return true;
 
     const myMember = currentRoom.members.find((m) => m.playerId === 'player-001');
     return myMember?.isReady ?? false;
-  }, [store.currentRoom, store.isHost]);
+  }, [currentRoom, isHost]);
 
   return {
     // State
-    currentRoom: store.currentRoom,
-    roomList: store.roomList,
-    isHost: store.isHost,
+    currentRoom,
+    roomList,
+    isHost,
+    currentPlayerId,
 
     // Computed
     canStartGame,
@@ -56,6 +71,7 @@ export function useRoom() {
     // Actions
     createRoom,
     joinRoom,
+    fetchRoomList,
     leaveRoom,
     toggleReady,
     startGame,

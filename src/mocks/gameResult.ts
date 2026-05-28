@@ -74,8 +74,7 @@ export const mockGameResult: GameResultData = {
   },
   highlights: [
     { id: 'yacht', icon: 'yacht', name: '快艇', value: 1, unit: '次' },
-    { id: 'straight', icon: 'straight', name: '大顺子', value: 2, unit: '次' },
-    { id: 'four-kind', icon: 'fourKind', name: '四条', value: 3, unit: '次' },
+    { id: 'upper-bonus', icon: 'upperBonus', name: '上半区额外奖励', value: 35, unit: '分', status: '已获得' },
     { id: 'best-round', icon: 'bestRound', name: '最高单回合', value: 28, unit: '分' },
   ],
 };

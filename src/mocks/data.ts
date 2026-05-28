@@ -2,8 +2,8 @@ import type { Player, PlayerStats, LeaderboardPlayer } from '@/types/player';
 
 /** Mock 当前玩家 */
 export const mockCurrentPlayer: Player = {
-  id: 'player-001',
-  name: '投骰大师',
+  id: 'game-20260522161407-2',
+  name: '穆俊杰',
   avatar: '',
   level: 15,
   exp: 2450,

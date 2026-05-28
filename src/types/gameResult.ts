@@ -17,7 +17,7 @@ export interface PlayerScoreDetail {
   totalScore: number;
 }
 
-export type ResultHighlightIcon = 'yacht' | 'straight' | 'fourKind' | 'bestRound';
+export type ResultHighlightIcon = 'yacht' | 'upperBonus' | 'bestRound' | 'straight' | 'fourKind';
 
 export interface ResultHighlight {
   id: string;
@@ -25,12 +25,14 @@ export interface ResultHighlight {
   name: string;
   value: number;
   unit: string;
+  status?: string;
 }
 
 export interface GameResultData {
   players: GameResultPlayer[];
   playerDetails: Record<number, PlayerScoreDetail>;
   highlights: ResultHighlight[];
+  playerHighlights?: Record<number, ResultHighlight[]>;
 }
 
 export interface SaveGameResultPayload {

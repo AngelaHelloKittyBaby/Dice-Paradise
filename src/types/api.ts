@@ -17,23 +17,21 @@ export interface PaginatedResponse<T> {
 
 /** 登录请求 */
 export interface LoginRequest {
-  username: string;
+  nickname: string;
   password: string;
 }
 
 /** 注册请求 */
 export interface RegisterRequest {
-  username: string;
+  nickname: string;
   password: string;
-  confirmPassword: string;
-  nickname?: string;
 }
 
 /** 登录响应 */
-export interface LoginResponse {
-  token: string;
-  player: import('./player').Player;
-}
+export type LoginResponse = import('./authApi').AuthSuccessResponse;
+
+/** 注册响应 */
+export type RegisterResponse = import('./authApi').AuthSuccessResponse;
 
 /** 排行榜响应 */
 export interface LeaderboardResponse {

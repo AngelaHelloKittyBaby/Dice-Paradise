@@ -25,4 +25,7 @@ export type { ToastProps } from './Toast';
 export { GameChat } from './GameChat';
 export type { GameChatMessage, GameChatProps } from './GameChat';
 
+export { SoundToggle } from './SoundToggle';
+export type { SoundToggleProps } from './SoundToggle';
+
 export * from './StarIcon';
