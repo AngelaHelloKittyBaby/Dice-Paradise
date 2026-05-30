@@ -472,7 +472,7 @@ export default function LeaderboardPage() {
 
   return (
     <ResponsiveStage
-      className="flex h-screen min-h-screen items-center justify-center overflow-hidden bg-[#04145b] text-white"
+      className="flex h-screen min-h-screen items-center justify-center overflow-hidden bg-transparent text-white"
       viewportClassName="relative overflow-hidden shadow-[0_0_80px_rgba(14,88,213,0.2)]"
       stageClassName="relative origin-top-left overflow-hidden bg-cover bg-center font-sans text-white"
       designWidth={1920}

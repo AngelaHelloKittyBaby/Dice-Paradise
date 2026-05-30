@@ -196,7 +196,19 @@ export async function getSettlementResultData(gameId: string, ownerPlayerId: str
   const playerIds = rankingList.map(player => player.playerId);
   const [details, highlights] = await Promise.all([
     Promise.all(playerIds.map(playerId => getScoreSummary(gameId, playerId))),
-    Promise.all(playerIds.map(playerId => getGameHighlights(gameId, playerId))),
+    Promise.all(
+      playerIds.map(async playerId => {
+        try {
+          return await getGameHighlights(gameId, playerId);
+        } catch (error) {
+          console.warn(
+            '[getSettlementResultData] 精彩回顾暂时不可用，已使用空数据:',
+            error instanceof Error ? error.message : 'Unknown error'
+          );
+          return [];
+        }
+      })
+    ),
   ]);
   const ownerId = toBackendPlayerId(ownerPlayerId);
   const playerDetails = Object.fromEntries(

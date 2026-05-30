@@ -12,19 +12,35 @@ export interface CreateOnlineRoomRequest {
 }
 
 export interface ApiRoomPlayer {
-  playerId: ApiRoomPlayerId;
+  playerId?: ApiRoomPlayerId;
+  player_id?: ApiRoomPlayerId;
   name: string;
-  isHost: boolean;
+  username?: string;
+  isHost?: boolean;
+  is_host?: boolean;
+  isReady?: boolean;
+  is_ready?: boolean;
   points?: number;
 }
 
 export interface ApiRoomData {
-  roomCode: string;
-  roomName: string;
-  maxPlayers: number;
-  players: ApiRoomPlayer[];
-  status: Room['status'];
+  roomCode?: string;
+  room_code?: string;
+  id?: string;
+  roomName?: string;
+  room_name?: string;
+  name?: string;
+  maxPlayers?: number;
+  max_players?: number;
+  players?: ApiRoomPlayer[];
+  members?: ApiRoomPlayer[];
+  status?: Room['status'];
   hostId?: ApiRoomPlayerId | null;
+  host_id?: ApiRoomPlayerId | null;
+  ownerId?: ApiRoomPlayerId | null;
+  owner_id?: ApiRoomPlayerId | null;
+  creatorId?: ApiRoomPlayerId | null;
+  creator_id?: ApiRoomPlayerId | null;
 }
 
 export interface ApiRoomListItem {
@@ -47,20 +63,20 @@ export interface JoinOnlineRoomRequest {
 
 export interface JoinOnlineRoomData {
   room: ApiRoomData;
-  playerId: ApiRoomPlayerId;
+  playerId?: ApiRoomPlayerId;
+  player_id?: ApiRoomPlayerId;
 }
 
 export interface LeaveOnlineRoomRequest {
   room_code: string;
-  player_id: ApiRoomPlayerId;
 }
 
-export interface DismissOnlineRoomRequest {
-  player_id: ApiRoomPlayerId;
+export interface KickOnlineRoomRequest {
+  target_player_id: ApiRoomPlayerId;
 }
 
-export interface StartOnlineRoomRequest {
-  player_id: ApiRoomPlayerId;
+export interface SetOnlineRoomReadyRequest {
+  is_ready: boolean;
 }
 
 export interface StartOnlineRoomData {

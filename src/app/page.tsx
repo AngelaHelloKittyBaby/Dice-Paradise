@@ -42,6 +42,7 @@ import { GameChat, SoundToggle, StarIcon, type GameChatMessage } from '@/compone
 import { JoinRoomModal, RoomHallModal } from '@/components/game';
 import { useHomePoints, useHomeSoundSetting } from '@/hooks';
 import { createGame } from '@/modules/game/gameApi';
+import { getRoomApiErrorMessage } from '@/modules/room/roomApi';
 import { usePlayerStore, useRoomStore } from '@/stores';
 import type { ApiGameMode } from '@/types/gameApi';
 import styles from './home-lobby.module.css';
@@ -61,7 +62,7 @@ interface ActionCard {
 type AiDifficulty = 'normal' | 'easy' | 'hard';
 type RoomDialogMode = 'choose' | 'join';
 
-const roomNumberLabel = 'Room number'.split('');
+const roomNumberLabel = 'Room ID'.split('');
 
 interface AiDifficultyOption {
   value: AiDifficulty;
@@ -219,14 +220,22 @@ function getProgressWidth(progress: string): string {
   return '8%';
 }
 
+function isRoomNotFoundErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return message.includes('房间不存在') || normalizedMessage.includes('room not found');
+}
+
 export default function HomePage() {
   const router = useRouter();
   const player = usePlayerStore(state => state.player);
   const isLoggedIn = usePlayerStore(state => state.isLoggedIn);
   const soundSettingFallback = usePlayerStore(state => state.settings.soundEnabled);
   const createRoom = useRoomStore(state => state.createRoom);
+  const currentRoom = useRoomStore(state => state.currentRoom);
   const fetchRoomList = useRoomStore(state => state.fetchRoomList);
   const joinRoom = useRoomStore(state => state.joinRoom);
+  const restoreCurrentRoom = useRoomStore(state => state.restoreCurrentRoom);
   const roomList = useRoomStore(state => state.roomList);
   const [isAuthPromptOpen, setIsAuthPromptOpen] = useState(false);
   const [isAiModeOpen, setIsAiModeOpen] = useState(false);
@@ -243,9 +252,8 @@ export default function HomePage() {
 
   const playerName = player?.name ?? '涔愪箰鐜╁';
   const playerLevel = player?.level ?? 28;
-  const playerStars = player?.gems ?? 12560;
-  const fallbackTopStars = player?.coins ?? 23560;
-  const { points: topStars } = useHomePoints(player?.id, fallbackTopStars);
+  const fallbackHomePoints = player?.coins ?? player?.gems ?? 12560;
+  const { points: homePoints } = useHomePoints(player?.id, fallbackHomePoints);
   const { soundEnabled: isSoundEnabled, setSoundEnabled: setIsSoundEnabled } = useHomeSoundSetting(
     player?.id,
     soundSettingFallback
@@ -260,6 +268,17 @@ export default function HomePage() {
     router.prefetch('/leaderboard');
     router.prefetch('/profile');
   }, [router]);
+
+  useEffect(() => {
+    if (!hasUserSession || currentRoom) return;
+
+    void restoreCurrentRoom().catch(error => {
+      console.warn(
+        '[restoreCurrentRoom] 当前房间恢复暂时不可用，继续进入大厅:',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    });
+  }, [currentRoom, hasUserSession, restoreCurrentRoom]);
 
   const handlePlayerProfileClick = () => {
     if (hasUserSession) {
@@ -325,11 +344,16 @@ export default function HomePage() {
 
   const refreshWaitingRoomList = async () => {
     setIsFetchingRoomList(true);
+    setGameCreateError(null);
 
     try {
       await fetchRoomList();
     } catch (error) {
-      setGameCreateError(error instanceof Error ? error.message : '房间列表获取失败，请稍后再试');
+      const errorMessage = getRoomApiErrorMessage(error, '房间列表获取失败，请稍后再试');
+
+      if (!isRoomNotFoundErrorMessage(errorMessage)) {
+        setGameCreateError(errorMessage);
+      }
     } finally {
       setIsFetchingRoomList(false);
     }
@@ -337,6 +361,14 @@ export default function HomePage() {
 
   const openRoomModeDialog = () => {
     if (creatingGameMode || isCreatingRoom || isJoiningRoom) return;
+
+    if (currentRoom) {
+      setIsRoomHallOpen(false);
+      setIsJoinRoomModalOpen(false);
+      setIsRoomModeOpen(false);
+      router.push('/room');
+      return;
+    }
 
     if (!hasUserSession) {
       setIsAuthPromptOpen(true);
@@ -348,7 +380,6 @@ export default function HomePage() {
     setJoinRoomCode('');
     setIsJoinRoomModalOpen(false);
     setIsRoomHallOpen(true);
-    void refreshWaitingRoomList();
   };
 
   const closeRoomModeDialog = () => {
@@ -359,6 +390,7 @@ export default function HomePage() {
     setIsRoomModeOpen(false);
     setRoomDialogMode('choose');
     setJoinRoomCode('');
+    setGameCreateError(null);
   };
 
   const handleCreateRoom = async () => {
@@ -382,7 +414,9 @@ export default function HomePage() {
       setIsRoomHallOpen(false);
       router.push('/room');
     } catch (error) {
-      setGameCreateError(error instanceof Error ? error.message : '房间创建失败，请稍后再试');
+      const errorMessage = getRoomApiErrorMessage(error, '房间创建失败，请稍后再试');
+
+      setGameCreateError(isRoomNotFoundErrorMessage(errorMessage) ? null : errorMessage);
     } finally {
       setIsCreatingRoom(false);
     }
@@ -407,7 +441,7 @@ export default function HomePage() {
       setJoinRoomCode('');
       router.push('/room');
     } catch (error) {
-      setGameCreateError(error instanceof Error ? error.message : '加入房间失败，请稍后再试');
+      setGameCreateError(getRoomApiErrorMessage(error, '加入房间失败，请稍后再试'));
     } finally {
       setIsJoiningRoom(false);
     }
@@ -432,7 +466,7 @@ export default function HomePage() {
       setJoinRoomCode('');
       router.push('/room');
     } catch (error) {
-      setGameCreateError(error instanceof Error ? error.message : '加入房间失败，请稍后再试');
+      setGameCreateError(getRoomApiErrorMessage(error, '加入房间失败，请稍后再试'));
     } finally {
       setIsJoiningRoom(false);
     }
@@ -446,6 +480,10 @@ export default function HomePage() {
     setIsJoinRoomModalOpen(true);
     void refreshWaitingRoomList();
   };
+
+  const shouldShowGameCreateToast = gameCreateError
+    ? !isRoomNotFoundErrorMessage(gameCreateError) && !isAiModeOpen && !isRoomHallOpen && !isJoinRoomModalOpen && !isRoomModeOpen
+    : false;
 
   return (
     <ResponsiveStage
@@ -481,7 +519,7 @@ export default function HomePage() {
               <span>Lv.{playerLevel}</span>
               <span className={styles.playerStars}>
                 <StarIcon size={15} />
-                {playerStars.toLocaleString()}
+                {homePoints.toLocaleString()}
               </span>
             </div>
             <div className={styles.levelTrack} aria-hidden="true">
@@ -510,7 +548,7 @@ export default function HomePage() {
             <span className={styles.rewardIconSlot} aria-hidden="true">
               <StarIcon size={25} />
             </span>
-            <strong>{topStars.toLocaleString()}</strong>
+            <strong>{homePoints.toLocaleString()}</strong>
           </div>
           <button className={styles.toolButton} type="button" aria-label="璁剧疆">
             <Settings size={30} />
@@ -551,7 +589,6 @@ export default function HomePage() {
         <div
           className={styles.aiModeOverlay}
           role="presentation"
-          onClick={() => setIsAiModeOpen(false)}
         >
           <section
             className={styles.aiBattleDialog}
@@ -633,7 +670,7 @@ export default function HomePage() {
       />
 
       {isRoomModeOpen && (
-        <div className={styles.roomModeOverlay} role="presentation" onClick={closeRoomModeDialog}>
+        <div className={styles.roomModeOverlay} role="presentation">
           <section
             className={styles.roomModeDialog}
             role="dialog"
@@ -723,7 +760,7 @@ export default function HomePage() {
                     disabled={isJoiningRoom}
                     onChange={event => setJoinRoomCode(event.target.value)}
                   />
-                  <label htmlFor="room-code-input" aria-label="Room number">
+                  <label htmlFor="room-code-input" aria-label="Room ID">
                     {roomNumberLabel.map((character, index) => (
                       <span key={`${character}-${index}`} style={{ transitionDelay: `${index * 50}ms` }}>
                         {character === ' ' ? '\u00A0' : character}
@@ -747,7 +784,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {gameCreateError && !isAiModeOpen && !isJoinRoomModalOpen && !isRoomModeOpen && (
+      {shouldShowGameCreateToast && (
         <div className={styles.gameCreateToast} role="alert">
           {gameCreateError}
         </div>

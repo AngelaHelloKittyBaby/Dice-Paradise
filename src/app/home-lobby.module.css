@@ -7,11 +7,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 50% 32%, rgba(30, 123, 255, 0.18), transparent 42%),
-    radial-gradient(ellipse at 0% 50%, rgba(18, 116, 233, 0.34), transparent 48%),
-    radial-gradient(ellipse at 100% 48%, rgba(34, 181, 255, 0.28), transparent 48%),
-    linear-gradient(180deg, #082c68 0%, #061b45 46%, #020b24 100%);
+  background: transparent;
   color: #ffffff;
 }
 
@@ -24,7 +20,7 @@
 }
 
 .gameLobbyPage::before {
-  opacity: 0.72;
+  opacity: 0.34;
   background:
     radial-gradient(ellipse at 8% 48%, rgba(68, 189, 255, 0.28), transparent 45%),
     radial-gradient(ellipse at 92% 52%, rgba(63, 201, 255, 0.24), transparent 45%);
@@ -36,7 +32,7 @@
 }
 
 .gameLobbyPage::after {
-  opacity: 0.82;
+  opacity: 0.34;
   background:
     radial-gradient(ellipse at center, transparent 0 50%, rgba(2, 8, 30, 0.2) 76%, rgba(1, 4, 19, 0.62) 100%),
     linear-gradient(90deg, rgba(1, 8, 30, 0.5), transparent 18% 82%, rgba(1, 8, 30, 0.5));
@@ -73,14 +69,14 @@
 
 .lobbyViewport::after {
   z-index: 2;
-  opacity: 0.42;
+  opacity: 0.26;
   background:
-    radial-gradient(circle at 12% 46%, rgba(97, 219, 255, 0.2), transparent 22%),
-    radial-gradient(circle at 88% 42%, rgba(92, 188, 255, 0.18), transparent 24%);
-  filter: blur(18px);
+    radial-gradient(circle at 3% 46%, rgba(97, 219, 255, 0.14), transparent 8%),
+    radial-gradient(circle at 97% 42%, rgba(92, 188, 255, 0.12), transparent 8%);
+  filter: blur(5px);
   mix-blend-mode: screen;
-  -webkit-mask-image: linear-gradient(90deg, #000 0 18%, transparent 36% 64%, #000 82% 100%);
-  mask-image: linear-gradient(90deg, #000 0 18%, transparent 36% 64%, #000 82% 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0 4%, rgba(0, 0, 0, 0.38) 7%, transparent 10.5% 89.5%, rgba(0, 0, 0, 0.38) 93%, #000 96% 100%);
+  mask-image: linear-gradient(90deg, #000 0 4%, rgba(0, 0, 0, 0.38) 7%, transparent 10.5% 89.5%, rgba(0, 0, 0, 0.38) 93%, #000 96% 100%);
   animation: viewportEdgeFlow 24s ease-in-out infinite;
 }
 
@@ -105,6 +101,21 @@
     radial-gradient(ellipse at 50% 22%, rgba(255, 241, 169, 0.12), transparent 34%),
     linear-gradient(90deg, rgba(8, 24, 70, 0.46), transparent 22%, transparent 76%, rgba(8, 24, 70, 0.38)),
     linear-gradient(180deg, rgba(5, 17, 45, 0.24), transparent 32%, rgba(4, 12, 38, 0.28));
+  pointer-events: none;
+}
+
+.lobbyStage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background:
+    linear-gradient(90deg, rgba(5, 18, 56, 0.18), rgba(39, 164, 255, 0.05) 5%, transparent 9.5% 90.5%, rgba(39, 164, 255, 0.05) 95%, rgba(5, 18, 56, 0.18)),
+    linear-gradient(90deg, rgba(255, 238, 157, 0.04), transparent 8% 92%, rgba(255, 238, 157, 0.04));
+  -webkit-backdrop-filter: blur(4px) saturate(1.02);
+  backdrop-filter: blur(4px) saturate(1.02);
+  -webkit-mask-image: linear-gradient(90deg, #000 0 3%, rgba(0, 0, 0, 0.52) 5.5%, transparent 9% 91%, rgba(0, 0, 0, 0.52) 94.5%, #000 97% 100%);
+  mask-image: linear-gradient(90deg, #000 0 3%, rgba(0, 0, 0, 0.52) 5.5%, transparent 9% 91%, rgba(0, 0, 0, 0.52) 94.5%, #000 97% 100%);
   pointer-events: none;
 }
 

@@ -102,9 +102,12 @@ function toAuthApiError(error: unknown, fallbackMessage: string) {
   return new AuthApiError(message, error.response?.status);
 }
 
-export async function loginWithNickname(request: AuthLoginRequest): Promise<AuthSession> {
+export async function loginWithNickname(request: { nickname: string; password: string }): Promise<AuthSession> {
   try {
-    const response = await apiClient.post<AuthSuccessResponse>('/auth/login', request);
+    const response = await apiClient.post<AuthSuccessResponse>('/auth/login', {
+      account: request.nickname,
+      password: request.password,
+    } satisfies AuthLoginRequest);
 
     return normalizeAuthSession(response.data);
   } catch (error) {
@@ -112,9 +115,13 @@ export async function loginWithNickname(request: AuthLoginRequest): Promise<Auth
   }
 }
 
-export async function registerWithNickname(request: AuthRegisterRequest): Promise<AuthSession> {
+export async function registerWithNickname(request: { nickname: string; password: string; phone?: string }): Promise<AuthSession> {
   try {
-    const response = await apiClient.post<AuthSuccessResponse>('/auth/register', request);
+    const response = await apiClient.post<AuthSuccessResponse>('/auth/register', {
+      nickname: request.nickname,
+      phone: request.phone ?? request.nickname,
+      password: request.password,
+    } satisfies AuthRegisterRequest);
 
     return normalizeAuthSession(response.data);
   } catch (error) {

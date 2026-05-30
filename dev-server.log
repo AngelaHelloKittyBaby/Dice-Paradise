@@ -28,3 +28,10 @@
  ○ Compiling / ...
  ✓ Compiled / in 1332ms (1786 modules)
  GET / 200 in 1640ms
+  ▲ Next.js 14.2.3
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+   Reload env: .env.local
+ ✓ Ready in 3.7s

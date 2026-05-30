@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { GlobalSideEffects } from '@/components/common/GlobalSideEffects/GlobalSideEffects';
 import { PreventBrowserZoom } from '@/components/layout';
 import '@/styles/globals.css';
 
@@ -19,7 +20,8 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={inter.className}>
         <PreventBrowserZoom />
-        {children}
+        <GlobalSideEffects />
+        <div className="dice-paradise-app-shell">{children}</div>
       </body>
     </html>
   );

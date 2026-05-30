@@ -30,8 +30,8 @@ export function useAuth() {
     storeLogout();
   }, [storeLogout]);
 
-  const register = useCallback(async (nickname: string, password: string) => {
-    const session = await registerWithNickname({ nickname, password });
+  const register = useCallback(async (nickname: string, phone: string, password: string) => {
+    const session = await registerWithNickname({ nickname, phone, password });
 
     storeLogin(session.player, {
       authToken: session.accessToken,

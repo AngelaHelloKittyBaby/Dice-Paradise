@@ -70,6 +70,20 @@ function ensureGameApiSuccess(response: GameApiEnvelope<unknown>, fallbackMessag
   }
 }
 
+function normalizePlayerId(playerId: string | number | null | undefined) {
+  return playerId === null || playerId === undefined ? null : String(playerId);
+}
+
+function toBackendPlayerId(playerId: string | number) {
+  return String(playerId);
+}
+
+function normalizeRollsLeft(rollsLeft: number | undefined) {
+  if (!Number.isInteger(rollsLeft)) return 3;
+
+  return Math.max(0, Math.min(3, rollsLeft as number));
+}
+
 function normalizeDiceValue(value: number): DiceValue {
   return value >= 1 && value <= 6 ? (value as DiceValue) : 1;
 }
@@ -81,7 +95,7 @@ function normalizeDiceValues(dice: number[] | undefined): DiceValue[] {
 }
 
 function normalizeScores(scores: ApiGameStatusData['players'][number]['scores']) {
-  return Object.entries(scores).reduce<Partial<Record<ScoreCategory, number>>>((result, [key, value]) => {
+  return Object.entries(scores ?? {}).reduce<Partial<Record<ScoreCategory, number>>>((result, [key, value]) => {
     if (value === null || value === undefined) return result;
 
     const category = scoreKeyMap[key as ApiScoreCategory];
@@ -113,17 +127,17 @@ export function normalizeGameStatus(data: ApiGameStatusData): GameStatusSnapshot
   return {
     gameId: data.gameId,
     gameMode: data.gameMode,
-    currentPlayer: data.currentPlayer ?? null,
+    currentPlayer: normalizePlayerId(data.currentPlayer),
     players: data.players.map(player => ({
-      playerId: player.playerId,
+      playerId: String(player.playerId),
       name: player.name,
-      isAi: player.isAi,
+      isAi: Boolean(player.isAi),
       scores: normalizeScores(player.scores),
-      totalScore: player.totalScore,
+      totalScore: player.totalScore ?? 0,
     })),
     dice: normalizeDiceValues(data.dice),
     diceLocked: normalizeDiceLocked(data.diceLocked),
-    rollsLeft: data.rollsLeft,
+    rollsLeft: normalizeRollsLeft(data.rollsLeft),
     status: data.status,
     createdAt: data.createdAt ?? null,
     finishedAt: data.finishedAt ?? null,
@@ -134,7 +148,7 @@ export function normalizeRollDiceData(data: RollDiceData, fallbackLocked?: boole
   return {
     dice: normalizeDiceValues(data.dice),
     diceLocked: normalizeDiceLocked(data.diceLocked, fallbackLocked),
-    rollsLeft: data.rollsLeft,
+    rollsLeft: normalizeRollsLeft(data.rollsLeft),
   };
 }
 
@@ -145,34 +159,36 @@ export function normalizeToggleDiceLockData(data: ToggleDiceLockData, fallbackLo
 }
 
 export async function createGame(request: CreateGameRequest): Promise<CreateGameData> {
-  console.log('🎮 [createGame] 发送请求:', JSON.stringify(request));
   try {
     const response = await apiClient.post<GameApiEnvelope<CreateGameData>>('/game/create', request);
-    console.log('✅ [createGame] 成功响应:', JSON.stringify(response.data));
-    return unwrapGameApiResponse(response.data, '游戏创建失败');
-  } catch (error: any) {
-    console.error('❌ [createGame] 错误详情:', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      request: error.config?.data,
-    });
+    const data = unwrapGameApiResponse(response.data, '游戏创建失败');
+
+    return {
+      ...data,
+      playerId: String(data.playerId),
+    };
+  } catch (error) {
     throw error;
   }
 }
-
 export async function getGameStatus(gameId: string): Promise<GameStatusSnapshot> {
   const response = await apiClient.get<GameApiEnvelope<ApiGameStatusData>>(`/game/${gameId}`);
   return normalizeGameStatus(unwrapGameApiResponse(response.data, '获取游戏状态失败'));
 }
 
 export async function rollGameDice(gameId: string, request: RollDiceRequest): Promise<RollDiceSnapshot> {
-  const response = await apiClient.post<GameApiEnvelope<RollDiceData>>(`/game/${gameId}/roll`, request);
+  const response = await apiClient.post<GameApiEnvelope<RollDiceData>>(`/game/${gameId}/roll`, {
+    ...request,
+    player_id: toBackendPlayerId(request.player_id),
+  });
   return normalizeRollDiceData(unwrapGameApiResponse(response.data, '掷骰子失败'), request.locked_dice);
 }
 
 export async function resetGameDice(gameId: string, request: ResetDiceRequest): Promise<RollDiceSnapshot> {
-  const response = await apiClient.post<GameApiEnvelope<RollDiceData>>(`/game/${gameId}/dice/reset`, request);
+  const response = await apiClient.post<GameApiEnvelope<RollDiceData>>(`/game/${gameId}/dice/reset`, {
+    ...request,
+    player_id: toBackendPlayerId(request.player_id),
+  });
   return normalizeRollDiceData(unwrapGameApiResponse(response.data, '重置骰子失败'));
 }
 
@@ -182,12 +198,18 @@ export async function toggleGameDiceLock(
 ): Promise<ToggleDiceLockSnapshot> {
   const response = await apiClient.post<GameApiEnvelope<ToggleDiceLockData>>(
     `/game/${gameId}/dice/toggle`,
-    request
+    {
+      ...request,
+      player_id: toBackendPlayerId(request.player_id),
+    }
   );
   return normalizeToggleDiceLockData(unwrapGameApiResponse(response.data, '切换骰子锁定失败'));
 }
 
 export async function quitGame(gameId: string, request: QuitGameRequest): Promise<void> {
-  const response = await apiClient.post<GameApiEnvelope<null>>(`/game/${gameId}/quit`, request);
+  const response = await apiClient.post<GameApiEnvelope<null>>(`/game/${gameId}/quit`, {
+    ...request,
+    player_id: toBackendPlayerId(request.player_id),
+  });
   ensureGameApiSuccess(response.data, '退出游戏失败');
 }

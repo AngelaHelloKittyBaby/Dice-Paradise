@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Home, RefreshCw, Users, X } from 'lucide-react';
 import joinRoomBoardImage from '@/assets/images/ui/panels/joinroomboard.png';
 import searchImage from '@/assets/images/ui/panels/search.png';
+import diceIconImage from '@/assets/images/ui/icons/骰子.png';
 import defaultAvatar from '@/assets/images/avatars/default-player.png';
 import type { RoomListItem } from '@/types/room';
 import { CustomScrollbar } from './CustomScrollbar';
@@ -83,6 +84,7 @@ export function JoinRoomModal({
   onRefreshRooms,
 }: JoinRoomModalProps) {
   const [searchInputFocused, setSearchInputFocused] = useState(false);
+  const [refreshSpinCount, setRefreshSpinCount] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollContentRef = useRef<HTMLDivElement>(null);
   const displayedRooms: RoomData[] = rooms.map((room, index) => ({
@@ -90,12 +92,13 @@ export function JoinRoomModal({
     avatar: defaultAvatar.src,
     roomName: room.name,
     mode: 'online',
-    tag: room.hostName || '小幸运',
+    tag: room.hostName || '房主',
     players: room.playerCount,
     maxPlayers: room.maxPlayers,
     isFull: room.playerCount >= room.maxPlayers,
     hasCrown: index === 0,
   }));
+  const visibleError = error && !error.includes('房间不存在') ? error : null;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,6 +107,11 @@ export function JoinRoomModal({
 
   const handleJoinRoom = (roomId: string) => {
     onJoinRoom?.(roomId);
+  };
+
+  const handleRefreshRooms = () => {
+    setRefreshSpinCount(count => count + 1);
+    onRefreshRooms?.();
   };
 
   return (
@@ -116,12 +124,8 @@ export function JoinRoomModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <motion.button
-            type="button"
+          <motion.div
             className="absolute inset-0 cursor-default bg-[radial-gradient(circle_at_48%_45%,rgba(81,54,168,0.25),transparent_36%),linear-gradient(180deg,rgba(3,7,30,0.94),rgba(6,5,28,0.98))]"
-            aria-label="关闭加入房间"
-            onClick={onClose}
-            disabled={isLoading}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -164,7 +168,7 @@ export function JoinRoomModal({
           </div>
 
           <motion.section
-            className="relative z-10 h-[654px] w-[990px]"
+            className="relative z-10 h-[740px] w-[1120px] max-h-[calc(100vh-28px)] max-w-[calc(100vw-28px)]"
             role="dialog"
             aria-modal="true"
             aria-label="加入房间"
@@ -186,7 +190,7 @@ export function JoinRoomModal({
                 'drop-shadow(0 34px 60px rgba(5, 5, 24, 0.58)) drop-shadow(0 0 46px rgba(255, 190, 65, 0.26))',
             }}
           >
-            <Image src={joinRoomBoardImage} alt="" fill sizes="990px" className="pointer-events-none object-contain" priority />
+            <Image src={joinRoomBoardImage} alt="" fill sizes="1120px" className="pointer-events-none object-contain" priority />
 
             <motion.div
               className="pointer-events-none absolute left-[50%] top-[28px] h-[102px] w-[270px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,242,166,0.52),rgba(255,182,55,0.12)_54%,transparent_72%)] blur-[8px]"
@@ -195,21 +199,15 @@ export function JoinRoomModal({
             />
 
             <form className="absolute inset-0 z-10" onSubmit={handleSubmit}>
-              <div className="absolute left-[192px] top-[90px] z-20 -translate-x-1/2 text-center">
-                <h2 className="text-[52px] font-black leading-none text-[#f8e7aa] drop-shadow-[0_3px_0_rgba(67,52,127,0.58)]">
-                  加入房间
-                </h2>
-              </div>
-
-              <div className="absolute left-[106px] top-[214px] z-20 text-[18px] font-black text-[#6b401c]">输入房间号</div>
+              <div className="absolute left-[205px] top-[248px] z-20 text-[18px] font-black text-[#6b401c]">输入房间号</div>
 
               <div
                 data-join-room-layer="searchStage"
-                className="absolute left-[184px] top-[260px] h-[64px] w-[266px] -translate-x-1/2"
+                className="absolute left-[315px] top-[294px] h-[74px] w-[248px] -translate-x-1/2"
               >
                 <motion.div
-                  className="relative h-full w-full"
-                  whileHover={!isLoading ? { scale: 1.02 } : undefined}
+                  className="relative h-full w-full overflow-hidden rounded-[14px]"
+                  whileHover={!isLoading ? { scale: 1.015 } : undefined}
                   animate={{
                     filter: searchInputFocused
                       ? [
@@ -225,21 +223,24 @@ export function JoinRoomModal({
                   }}
                   transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                 >
-                  <Image src={searchImage} alt="" fill sizes="266px" className="pointer-events-none object-cover opacity-90" priority />
-
-                  <motion.span
-                    className="pointer-events-none absolute right-[17px] top-[18px] h-[30px] w-[30px] rounded-[7px]"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-                    style={{
-                      background:
-                        'conic-gradient(from 0deg, transparent, rgba(255,255,255,0.76), rgba(180,76,255,0.9), transparent, rgba(122,61,255,0.78), transparent)',
-                      filter: 'blur(2px)',
-                      mixBlendMode: 'screen',
-                    }}
+                  <Image
+                    src={searchImage}
+                    alt=""
+                    fill
+                    sizes="248px"
+                    className="pointer-events-none object-cover"
+                    priority
                   />
 
-                  <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[14px]">
+                  <motion.span
+                    className="pointer-events-none absolute right-[17px] top-1/2 grid h-[34px] w-[34px] -translate-y-1/2 place-items-center"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+                  >
+                    <Image src={diceIconImage} alt="" fill sizes="34px" className="object-contain" priority />
+                  </motion.span>
+
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[14px] opacity-40">
                     {ambientParticles.map(particle => (
                       <motion.span
                         key={particle.id}
@@ -269,10 +270,10 @@ export function JoinRoomModal({
                     ))}
                   </div>
 
-                  <div className="absolute left-[17px] top-1/2 flex h-[48px] w-[188px] -translate-y-1/2 items-center">
+                  <div className="absolute left-[92px] top-1/2 h-[46px] w-[104px] -translate-y-1/2">
                     <input
                       id="join-room-code-input"
-                      className="peer h-full w-full bg-transparent pl-[2px] pr-[8px] text-[18px] font-black text-[#8c5327] outline-none placeholder:text-transparent disabled:cursor-wait"
+                      className="peer block h-full w-full border-0 border-b border-[#8f6a42]/50 bg-transparent px-[5px] pb-[6px] pt-[12px] text-[18px] font-black text-[#8c5327] outline-none placeholder:text-transparent disabled:cursor-wait"
                       type="text"
                       inputMode="text"
                       maxLength={12}
@@ -285,16 +286,23 @@ export function JoinRoomModal({
                       onBlur={() => setSearchInputFocused(false)}
                       onChange={event => onRoomCodeChange(event.target.value.slice(0, 12))}
                     />
+                    <span className="pointer-events-none absolute bottom-[4px] left-1/2 h-[2px] w-0 bg-[#5264ae] transition-all duration-200 ease-out peer-focus:w-1/2" />
+                    <span className="pointer-events-none absolute bottom-[4px] right-1/2 h-[2px] w-0 bg-[#5264ae] transition-all duration-200 ease-out peer-focus:w-1/2" />
                     <label
-                      className="pointer-events-none absolute left-[2px] top-1/2 flex -translate-y-1/2 items-center gap-[1px] text-[15px] font-black text-[#a56d3d] transition-colors duration-300 peer-focus:text-[#7f3bff] peer-[:not(:placeholder-shown)]:opacity-0"
+                      className="pointer-events-none absolute left-[5px] top-[14px] flex items-center gap-[1px] text-[15px] font-black text-[#a56d3d]"
                       htmlFor="join-room-code-input"
-                      aria-label="Room number"
+                      aria-label="Room ID"
                     >
                       {roomNumberLabel.map((character, index) => (
                         <motion.span
                           key={`${character}-${index}`}
-                          animate={searchInputFocused ? { y: [0, -4, 0], color: ['#a56d3d', '#8d45ff', '#a56d3d'] } : undefined}
-                          transition={{ duration: 1.4, delay: index * 0.05, repeat: searchInputFocused ? Infinity : 0 }}
+                          className="inline-block"
+                          animate={
+                            searchInputFocused || Boolean(joinRoomCode)
+                              ? { y: -20, color: '#5264ae', fontSize: 14 }
+                              : { y: 0, color: '#a56d3d', fontSize: 15 }
+                          }
+                          transition={{ duration: 0.2, delay: index * 0.05, ease: 'easeOut' }}
                         >
                           {character === ' ' ? '\u00A0' : character}
                         </motion.span>
@@ -304,7 +312,7 @@ export function JoinRoomModal({
                 </motion.div>
               </div>
 
-              <div data-join-room-layer="joinButtonAnchor" className="absolute left-[184px] top-[374px] h-[62px] w-[250px] -translate-x-1/2">
+              <div data-join-room-layer="joinButtonAnchor" className="absolute left-[315px] top-[386px] h-[62px] w-[250px] -translate-x-1/2">
                 <motion.button
                   type="submit"
                   className="group relative grid h-full w-full place-items-center rounded-[999px] border-[3px] border-[#9ec0ff] bg-gradient-to-b from-[#5f8cff] via-[#3568da] to-[#234cae] text-[26px] font-black text-white outline-none disabled:cursor-wait disabled:saturate-50"
@@ -324,7 +332,7 @@ export function JoinRoomModal({
                 >
                   <span className="pointer-events-none absolute inset-[5px] rounded-[999px] bg-gradient-to-b from-white/22 via-transparent to-[#0d2c7a]/18" />
                   <span className="relative z-10 drop-shadow-[0_2px_0_rgba(25,47,117,0.65)]">
-                    {isLoading ? '加入中' : '加入房间'}
+                    {isLoading ? '进入中' : '加入房间'}
                   </span>
                   {buttonSparks.map(spark => (
                     <motion.span
@@ -342,30 +350,42 @@ export function JoinRoomModal({
                 </motion.button>
               </div>
 
-              <section className="absolute left-[426px] top-[164px] z-20 h-[402px] w-[470px]" aria-label="推荐房间">
-                <div className="mb-[10px] flex h-[58px] items-center justify-between rounded-[14px] border-2 border-[#c78337] bg-[#ffe0a1] px-[22px] text-[#6d421f] shadow-[inset_0_2px_6px_rgba(255,255,255,0.62),0_3px_0_rgba(124,70,24,0.18)]">
-                  <strong className="text-[18px] font-black">推荐房间</strong>
+              <section className="absolute left-[510px] top-[272px] z-20 h-[356px] w-[430px]" aria-label="推荐房间">
+                <div className="mb-[10px] flex h-[56px] min-w-0 items-center justify-between gap-3 overflow-hidden rounded-[14px] border-2 border-[#c78337] bg-[#ffe0a1] px-[22px] text-[#6d421f] shadow-[inset_0_2px_6px_rgba(255,255,255,0.62),0_3px_0_rgba(124,70,24,0.18)]">
+                  <strong className="min-w-0 flex-1 truncate text-[18px] font-black">推荐房间</strong>
                   <motion.button
                     type="button"
-                    className="grid h-[38px] w-[38px] place-items-center rounded-full text-[#875225] outline-none hover:bg-[#f4ce8d]/60 disabled:cursor-wait"
+                    className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-full text-[#875225] outline-none hover:bg-[#f4ce8d]/60 disabled:cursor-wait"
                     aria-label="刷新推荐房间"
-                    onClick={onRefreshRooms}
+                    onClick={handleRefreshRooms}
                     disabled={isRoomListLoading || isLoading}
-                    animate={isRoomListLoading ? { rotate: 360 } : { rotate: 0 }}
-                    transition={isRoomListLoading ? { duration: 0.9, repeat: Infinity, ease: 'linear' } : undefined}
+                    whileHover={!isRoomListLoading && !isLoading ? { scale: 1.08 } : undefined}
+                    whileTap={!isRoomListLoading && !isLoading ? { scale: 0.92 } : undefined}
                   >
-                    <RefreshCw size={24} strokeWidth={3} />
+                    <motion.span
+                      key={isRoomListLoading ? 'loading' : refreshSpinCount}
+                      className="grid h-full w-full place-items-center"
+                      initial={{ rotate: 0 }}
+                      animate={isRoomListLoading || refreshSpinCount > 0 ? { rotate: 360 } : { rotate: 0 }}
+                      transition={
+                        isRoomListLoading
+                          ? { duration: 0.82, repeat: Infinity, ease: 'linear' }
+                          : { duration: 0.55, ease: 'easeInOut' }
+                      }
+                    >
+                      <RefreshCw size={24} strokeWidth={3} />
+                    </motion.span>
                   </motion.button>
                 </div>
 
-                <div className="flex h-[326px] gap-[10px] rounded-[16px] border-2 border-[#d29b4a] bg-[#f0c875] p-[10px] shadow-[inset_0_3px_10px_rgba(112,65,22,0.14)]">
+                <div className="flex h-[290px] gap-[10px] rounded-[16px] border-2 border-[#d29b4a] bg-[#f0c875] p-[10px] shadow-[inset_0_3px_10px_rgba(112,65,22,0.14)]">
                   <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto pr-1 no-scrollbar" style={{ scrollBehavior: 'smooth' }}>
                     <div ref={scrollContentRef} className="pb-2">
                       {displayedRooms.map(room => (
                         <RoomListItemCard key={room.id} room={room} onJoin={handleJoinRoom} />
                       ))}
                       {displayedRooms.length === 0 && (
-                        <div className="grid h-[246px] place-items-center rounded-[14px] border-2 border-dashed border-[#b97b2f] bg-[#ffe8aa] text-[18px] font-black text-[#7b4a1c]">
+                        <div className="grid h-[214px] place-items-center rounded-[14px] border-2 border-dashed border-[#b97b2f] bg-[#ffe8aa] px-6 text-center text-[18px] font-black text-[#7b4a1c]">
                           {isRoomListLoading ? '正在获取房间列表' : '暂无等待中的房间'}
                         </div>
                       )}
@@ -378,7 +398,7 @@ export function JoinRoomModal({
                 </div>
               </section>
 
-              <div className="absolute bottom-[47px] left-[160px] right-[160px] z-20 flex items-center justify-between text-[15px] font-black text-[#d4af37]">
+              <div className="absolute bottom-[48px] left-[190px] right-[190px] z-20 flex items-center justify-between text-[15px] font-black text-[#d4af37]">
                 <div className="flex items-center gap-2 drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]">
                   <Home size={20} fill="currentColor" className="opacity-80" />
                   <span>在线房间：{displayedRooms.length}</span>
@@ -389,14 +409,14 @@ export function JoinRoomModal({
                 </div>
               </div>
 
-              {error && (
+              {visibleError && (
                 <motion.p
-                  className="absolute bottom-[86px] left-1/2 z-30 m-0 -translate-x-1/2 rounded-full border border-[#ffd270]/60 bg-[#3a124f]/88 px-5 py-2 text-[15px] font-black text-[#ffe59b] shadow-[0_0_24px_rgba(164,69,255,0.42)]"
+                  className="absolute left-[190px] top-[500px] z-30 m-0 max-w-[250px] rounded-full border border-[#ffd270]/60 bg-[#3a124f]/88 px-5 py-2 text-center text-[15px] font-black text-[#ffe59b] shadow-[0_0_24px_rgba(164,69,255,0.42)]"
                   role="alert"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  {error}
+                  {visibleError}
                 </motion.p>
               )}
             </form>
@@ -457,3 +477,4 @@ function CoinParticle() {
     />
   );
 }
+

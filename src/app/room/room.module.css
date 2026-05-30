@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #071427;
+  background: transparent;
   color: #ffffff;
 }
 
@@ -668,6 +668,13 @@
 .removePlayerButton:hover {
   filter: brightness(1.08);
   transform: translateY(-2px);
+}
+
+.removePlayerButton:disabled {
+  cursor: wait;
+  filter: saturate(0.62);
+  opacity: 0.68;
+  transform: none;
 }
 
 .chatPanel {

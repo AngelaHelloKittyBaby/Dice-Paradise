@@ -1,13 +1,15 @@
 import type { Player, PlayerStats } from './player';
 
-export interface AuthRequest {
-  nickname: string;
+export interface AuthLoginRequest {
+  account: string;
   password: string;
 }
 
-export type AuthLoginRequest = AuthRequest;
-
-export type AuthRegisterRequest = AuthRequest;
+export interface AuthRegisterRequest {
+  nickname: string;
+  phone: string;
+  password: string;
+}
 
 export interface AuthUserResponse {
   id: number;

@@ -35,11 +35,8 @@ export function RoomHallModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <motion.button
-            type="button"
+          <motion.div
             className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-[6px]"
-            aria-label="关闭房间大厅"
-            onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

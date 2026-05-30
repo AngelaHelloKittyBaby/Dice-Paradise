@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Copy, Plus, Settings, UserPlus, X } from 'lucide-react';
@@ -9,20 +9,15 @@ import { GameChat, SoundToggle, StarIcon, type GameChatMessage } from '@/compone
 import roomBackground from '@/assets/images/backgrounds/room/room-bg.png';
 import defaultAvatar from '@/assets/images/avatars/default-player.png';
 import { useHomeSoundSetting } from '@/hooks';
-import { startOnlineRoom } from '@/modules/room/roomApi';
+import { getOnlineRoom, startOnlineRoom } from '@/modules/room/roomApi';
 import { usePlayerStore, useRoomStore } from '@/stores';
 import type { RoomMember } from '@/types/room';
 import styles from './room.module.css';
 
-const chatMessages: GameChatMessage[] = [
-  { id: 'room-system-1', type: 'system', author: '系统消息', text: '房间已创建，等待玩家加入。' },
-  { id: 'room-system-2', type: 'system', author: '系统消息', text: '房主可以在玩家准备后开始游戏。' },
-  { id: 'room-player-1', type: 'player', author: '小可爱', avatar: defaultAvatar.src, text: '冲鸭！' },
-  { id: 'room-player-2', type: 'player', author: '幸运星', avatar: defaultAvatar.src, text: '加油加油！' },
-  { id: 'room-player-3', type: 'player', author: '乐乐玩家', avatar: defaultAvatar.src, text: '大家好运~' },
-];
+const emptyChatMessages: GameChatMessage[] = [];
 
 const ROOM_SLOT_COUNT = 4;
+const ROOM_SYNC_INTERVAL_MS = 2000;
 
 const avatarTones = [
   styles.avatarBlue,
@@ -44,11 +39,15 @@ export default function RoomPage() {
   const currentPlayerId = useRoomStore(state => state.currentPlayerId);
   const startGame = useRoomStore(state => state.startGame);
   const leaveRoom = useRoomStore(state => state.leaveRoom);
+  const restoreCurrentRoom = useRoomStore(state => state.restoreCurrentRoom);
+  const setCurrentRoom = useRoomStore(state => state.setCurrentRoom);
   const toggleReady = useRoomStore(state => state.toggleReady);
-  const updateRoomMembers = useRoomStore(state => state.updateRoomMembers);
+  const kickPlayer = useRoomStore(state => state.kickPlayer);
   const [isCopied, setIsCopied] = useState(false);
   const [isCreatingGame, setIsCreatingGame] = useState(false);
   const [isLeavingRoom, setIsLeavingRoom] = useState(false);
+  const [isUpdatingReady, setIsUpdatingReady] = useState(false);
+  const [kickingPlayerId, setKickingPlayerId] = useState<string | null>(null);
   const [gameCreateError, setGameCreateError] = useState<string | null>(null);
 
   const roomId = currentRoom?.id ?? '等待接口返回';
@@ -69,6 +68,62 @@ export default function RoomPage() {
   );
   const currentPlayerMember = members.find(member => member.playerId === currentPlayerId);
   const isCurrentPlayerReady = Boolean(currentPlayerMember?.isReady);
+
+  useEffect(() => {
+    if (currentRoom?.id && currentPlayerId) return;
+
+    if (!player) {
+      router.replace('/login?mode=login&reason=auth-required');
+      return;
+    }
+
+    let isCancelled = false;
+
+    const restoreRoom = async () => {
+      try {
+        const room = await restoreCurrentRoom();
+        if (!isCancelled && !room) router.replace('/');
+      } catch (error) {
+        if (!isCancelled) {
+          setGameCreateError(error instanceof Error ? error.message : '恢复房间状态失败，请稍后再试');
+        }
+      }
+    };
+
+    void restoreRoom();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentPlayerId, currentRoom?.id, player, restoreCurrentRoom, router]);
+
+  useEffect(() => {
+    if (!currentRoom?.id || !currentPlayerId) return;
+
+    let isCancelled = false;
+    let syncTimer: number | null = null;
+
+    const syncRoom = async () => {
+      try {
+        const room = await getOnlineRoom(currentRoom.id);
+        if (!isCancelled) setCurrentRoom(room, currentPlayerId);
+      } catch (error) {
+        if (isCancelled) return;
+
+        console.error(error);
+      }
+    };
+
+    void syncRoom();
+    syncTimer = window.setInterval(() => {
+      void syncRoom();
+    }, ROOM_SYNC_INTERVAL_MS);
+
+    return () => {
+      isCancelled = true;
+      if (syncTimer) window.clearInterval(syncTimer);
+    };
+  }, [currentPlayerId, currentRoom?.id, setCurrentRoom]);
 
   const handleCopyRoomId = async () => {
     try {
@@ -91,9 +146,7 @@ export default function RoomPage() {
     setGameCreateError(null);
 
     try {
-      const game = await startOnlineRoom(roomId, {
-        player_id: currentPlayerId,
-      });
+      const game = await startOnlineRoom(roomId);
       const canStart = startGame();
       if (!canStart) return;
 
@@ -126,15 +179,34 @@ export default function RoomPage() {
     }
   };
 
-  const handleRemovePlayer = (playerId: string) => {
-    if (!isHost || !currentRoom) return;
+  const handleRemovePlayer = async (playerId: string) => {
+    if (!isHost || !currentRoom || kickingPlayerId) return;
 
-    updateRoomMembers(currentRoom.members.filter(member => member.playerId !== playerId));
+    setKickingPlayerId(playerId);
+    setGameCreateError(null);
+
+    try {
+      await kickPlayer(playerId);
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '移除玩家失败，请稍后再试');
+    } finally {
+      setKickingPlayerId(null);
+    }
   };
 
-  const handleReadyToggle = () => {
-    if (isHost) return;
-    toggleReady();
+  const handleReadyToggle = async () => {
+    if (isHost || isUpdatingReady) return;
+
+    setIsUpdatingReady(true);
+    setGameCreateError(null);
+
+    try {
+      await toggleReady();
+    } catch (error) {
+      setGameCreateError(error instanceof Error ? error.message : '更新准备状态失败，请稍后再试');
+    } finally {
+      setIsUpdatingReady(false);
+    }
   };
 
   return (
@@ -180,13 +252,13 @@ export default function RoomPage() {
 
       <section className={styles.roomTableArea} aria-label="房间桌面区域">
         <div className={styles.tableDiceSlot} aria-label="桌面骰子预留位置" />
-        <div className={styles.tableHelmSlot} aria-label="桌面船舵预留位置" />
+        <div className={styles.tableHelmSlot} aria-label="桌面舵轮预留位置" />
       </section>
 
       <section className={styles.playerCards} aria-label="玩家卡片">
         {roomSlots.map((member, index) => {
           const isEmptySlot = !member;
-          const statusLabel = member?.isHost ? '房主' : member?.isReady ? '已准备 ✅' : '未准备';
+          const statusLabel = member?.isHost ? '房主' : member?.isReady ? '已准备' : '未准备';
           const points = member?.points ?? (12600 - index * 1360);
 
           return (
@@ -198,7 +270,8 @@ export default function RoomPage() {
                 <button
                   className={styles.removePlayerButton}
                   type="button"
-                  onClick={() => handleRemovePlayer(member.playerId)}
+                  onClick={() => void handleRemovePlayer(member.playerId)}
+                  disabled={Boolean(kickingPlayerId)}
                   aria-label={`移除 ${member.name}`}
                 >
                   <X size={18} strokeWidth={3} />
@@ -264,20 +337,22 @@ export default function RoomPage() {
               isCurrentPlayerReady ? styles.readyActionButtonActive : ''
             }`}
             type="button"
-            onClick={handleReadyToggle}
+            disabled={isUpdatingReady}
+            onClick={() => void handleReadyToggle()}
           >
-            {isCurrentPlayerReady ? '已准备 ✅' : '准备'}
+            {isUpdatingReady ? '更新中' : isCurrentPlayerReady ? '已准备' : '准备'}
           </button>
         )}
         {gameCreateError && <p className={styles.roomGameError}>{gameCreateError}</p>}
       </section>
 
       <GameChat
+        key={roomId}
         className={styles.chatPanel}
         ariaLabel="房间聊天框"
-        messages={chatMessages}
-        currentUserName={members[0]?.name ?? '乐乐玩家'}
-        currentUserAvatar={getMemberAvatar(members[0]?.avatar)}
+        messages={emptyChatMessages}
+        currentUserName={currentPlayerMember?.name ?? members[0]?.name ?? '乐乐玩家'}
+        currentUserAvatar={getMemberAvatar(currentPlayerMember?.avatar ?? members[0]?.avatar)}
         defaultHeight={306}
         minHeight={220}
         maxHeight={430}

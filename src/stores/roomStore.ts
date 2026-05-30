@@ -1,5 +1,15 @@
 import { create } from 'zustand';
-import { createOnlineRoom, dismissOnlineRoom, getWaitingRoomList, joinOnlineRoom, leaveOnlineRoom } from '@/modules/room/roomApi';
+import {
+  createOnlineRoom,
+  dismissOnlineRoom,
+  getCurrentOnlineRoom,
+  getWaitingRoomList,
+  joinOnlineRoom,
+  kickOnlineRoom,
+  leaveOnlineRoom,
+  recoverJoinedRoomSession,
+  setOnlineRoomReady,
+} from '@/modules/room/roomApi';
 import type { Room, RoomListItem, RoomMember, RoomSettings } from '@/types/room';
 import { usePlayerStore } from './playerStore';
 
@@ -15,13 +25,25 @@ interface RoomActions {
   createRoom: (name: string, settings: RoomSettings, playerName?: string) => Promise<Room>;
   joinRoom: (roomCode: string, playerName?: string) => Promise<Room>;
   fetchRoomList: () => Promise<RoomListItem[]>;
+  restoreCurrentRoom: () => Promise<Room | null>;
   leaveRoom: () => Promise<void>;
-  toggleReady: () => void;
+  kickPlayer: (targetPlayerId: string) => Promise<Room>;
+  toggleReady: () => Promise<Room | null>;
   startGame: () => boolean;
   updateRoomMembers: (members: RoomMember[]) => void;
 }
 
 type RoomStore = RoomState & RoomActions;
+
+let restoreCurrentRoomRequest: Promise<Room | null> | null = null;
+
+function applyCurrentRoomSession(set: (state: Partial<RoomState>) => void, room: Room, currentPlayerId: string) {
+  set({
+    currentRoom: room,
+    isHost: Boolean(room.hostId && room.hostId === currentPlayerId),
+    currentPlayerId,
+  });
+}
 
 function getRoomListItem(room: Room): RoomListItem {
   return {
@@ -53,27 +75,48 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   currentPlayerId: '',
 
   // Actions
-  setCurrentRoom: (room, currentPlayerId) =>
+  setCurrentRoom: (room, currentPlayerId) => {
+    if (!room) {
+      set({
+        currentRoom: null,
+        currentPlayerId: '',
+        isHost: false,
+      });
+      return;
+    }
+
+    const nextPlayerId = currentPlayerId ?? get().currentPlayerId;
+
     set({
       currentRoom: room,
-      currentPlayerId: currentPlayerId ?? get().currentPlayerId,
-      isHost: Boolean(room?.members.find(member => member.playerId === (currentPlayerId ?? get().currentPlayerId))?.isHost),
-    }),
+      currentPlayerId: nextPlayerId,
+      isHost: Boolean(room.hostId && room.hostId === nextPlayerId),
+    });
+  },
 
   createRoom: async (name, settings, playerName = '投骰大师') => {
-    const newRoom = await createOnlineRoom({
-      client_id: getCurrentClientId(),
-      player_name: playerName,
-      room_name: name,
-      max_players: settings.maxPlayers,
-      game_mode: 'online',
-    });
-    const currentPlayerId = newRoom.hostId;
+    let newRoom: Room;
+    let currentPlayerId = '';
 
+    try {
+      newRoom = await createOnlineRoom({
+        client_id: getCurrentClientId(),
+        player_name: playerName,
+        room_name: name,
+        max_players: settings.maxPlayers,
+        game_mode: 'online',
+      });
+      currentPlayerId = newRoom.hostId || newRoom.members.find(member => member.isHost)?.playerId || newRoom.members[0]?.playerId || '';
+    } catch (error) {
+      const recoveredSession = await recoverJoinedRoomSession(error, playerName);
+      if (!recoveredSession) throw error;
+
+      newRoom = recoveredSession.room;
+      currentPlayerId = recoveredSession.playerId;
+    }
+
+    applyCurrentRoomSession(set, newRoom, currentPlayerId);
     set({
-      currentRoom: newRoom,
-      isHost: true,
-      currentPlayerId,
       roomList: [getRoomListItem(newRoom), ...get().roomList.filter(room => room.id !== newRoom.id)],
     });
 
@@ -81,18 +124,27 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
   },
 
   joinRoom: async (roomCode, playerName = '乐乐玩家') => {
-    const joinResult = await joinOnlineRoom({
-      client_id: getCurrentClientId(),
-      room_code: roomCode,
-      player_name: playerName,
-    });
-    const joinedRoom = joinResult.room;
-    const currentPlayerId = joinResult.playerId;
+    let joinedRoom: Room;
+    let currentPlayerId = '';
 
+    try {
+      const joinResult = await joinOnlineRoom({
+        client_id: getCurrentClientId(),
+        room_code: roomCode,
+        player_name: playerName,
+      });
+      joinedRoom = joinResult.room;
+      currentPlayerId = joinResult.playerId;
+    } catch (error) {
+      const recoveredSession = await recoverJoinedRoomSession(error, playerName);
+      if (!recoveredSession) throw error;
+
+      joinedRoom = recoveredSession.room;
+      currentPlayerId = recoveredSession.playerId;
+    }
+
+    applyCurrentRoomSession(set, joinedRoom, currentPlayerId);
     set({
-      currentRoom: joinedRoom,
-      currentPlayerId,
-      isHost: Boolean(joinedRoom.members.find(member => member.playerId === currentPlayerId)?.isHost),
       roomList: [getRoomListItem(joinedRoom), ...get().roomList.filter(room => room.id !== joinedRoom.id)],
     });
 
@@ -107,21 +159,63 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
     return roomList;
   },
 
+  restoreCurrentRoom: () => {
+    if (restoreCurrentRoomRequest) return restoreCurrentRoomRequest;
+
+    restoreCurrentRoomRequest = (async () => {
+      const player = usePlayerStore.getState().player;
+
+      if (!player) {
+        set({
+          currentRoom: null,
+          isHost: false,
+          currentPlayerId: '',
+        });
+        return null;
+      }
+
+      const session = await getCurrentOnlineRoom(player.id, player.name);
+
+      if (!session) {
+        set({
+          currentRoom: null,
+          isHost: false,
+          currentPlayerId: '',
+        });
+        return null;
+      }
+
+      applyCurrentRoomSession(set, session.room, session.playerId);
+      set({
+        roomList: [getRoomListItem(session.room), ...get().roomList.filter(room => room.id !== session.room.id)],
+      });
+
+      return session.room;
+    })().finally(() => {
+      restoreCurrentRoomRequest = null;
+    });
+
+    return restoreCurrentRoomRequest;
+  },
+
   leaveRoom: async () => {
     const { currentRoom, currentPlayerId } = get();
 
     if (!currentRoom || !currentPlayerId) return;
 
-    const shouldDismissRoom = Boolean(currentRoom.members.find(member => member.playerId === currentPlayerId)?.isHost);
+    const shouldDismissRoom = Boolean(currentRoom.hostId && currentRoom.hostId === currentPlayerId);
 
     if (shouldDismissRoom) {
-      await dismissOnlineRoom(currentRoom.id, {
-        player_id: currentPlayerId,
-      });
+      try {
+        await dismissOnlineRoom(currentRoom.id);
+      } catch {
+        await leaveOnlineRoom({
+          room_code: currentRoom.id,
+        });
+      }
     } else {
       await leaveOnlineRoom({
         room_code: currentRoom.id,
-        player_id: currentPlayerId,
       });
     }
 
@@ -133,20 +227,42 @@ export const useRoomStore = create<RoomStore>((set, get) => ({
     });
   },
 
-  toggleReady: () => {
+  kickPlayer: async (targetPlayerId) => {
     const { currentRoom, currentPlayerId, isHost } = get();
-    if (!currentRoom || isHost) return;
+
+    if (!currentRoom || !currentPlayerId || !isHost) {
+      throw new Error('Only the room host can kick players');
+    }
+
+    const updatedRoom = await kickOnlineRoom(currentRoom.id, {
+      target_player_id: targetPlayerId,
+    });
+
+    applyCurrentRoomSession(set, updatedRoom, currentPlayerId);
+    set({
+      roomList: [getRoomListItem(updatedRoom), ...get().roomList.filter(room => room.id !== updatedRoom.id)],
+    });
+
+    return updatedRoom;
+  },
+
+  toggleReady: async () => {
+    const { currentRoom, currentPlayerId, isHost } = get();
+    if (!currentRoom || !currentPlayerId || isHost) return null;
 
     const myMember = currentRoom.members.find((m) => m.playerId === currentPlayerId);
-    if (!myMember) return;
+    if (!myMember) return null;
 
-    const updatedMembers = currentRoom.members.map((m) =>
-      m.playerId === currentPlayerId ? { ...m, isReady: !m.isReady } : m
-    );
-
-    set({
-      currentRoom: { ...currentRoom, members: updatedMembers },
+    const updatedRoom = await setOnlineRoomReady(currentRoom.id, {
+      is_ready: !myMember.isReady,
     });
+
+    applyCurrentRoomSession(set, updatedRoom, currentPlayerId);
+    set({
+      roomList: [getRoomListItem(updatedRoom), ...get().roomList.filter(room => room.id !== updatedRoom.id)],
+    });
+
+    return updatedRoom;
   },
 
   startGame: () => {

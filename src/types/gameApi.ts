@@ -13,14 +13,14 @@ export interface CreateGameData {
 }
 
 export interface RollDiceRequest {
-  player_id: string;
+  player_id: string | number;
   locked_dice?: boolean[];
 }
 
 export interface RollDiceData {
-  dice: number[];
-  diceLocked: boolean[];
-  rollsLeft: number;
+  dice?: number[];
+  diceLocked?: boolean[];
+  rollsLeft?: number;
 }
 
 export interface RollDiceSnapshot {
@@ -30,16 +30,16 @@ export interface RollDiceSnapshot {
 }
 
 export interface ResetDiceRequest {
-  player_id: string;
+  player_id: string | number;
 }
 
 export interface ToggleDiceLockRequest {
-  player_id: string;
+  player_id: string | number;
   dice_index: number;
 }
 
 export interface ToggleDiceLockData {
-  diceLocked: boolean[];
+  diceLocked?: boolean[];
 }
 
 export interface ToggleDiceLockSnapshot {
@@ -50,28 +50,28 @@ export type ApiScoreCategory = Exclude<ScoreCategory, 'yacht'> | 'yahtzee';
 export type ApiGameStatus = 'waiting' | 'playing' | 'finished' | string;
 
 export interface SubmitScoreRequest {
-  player_id: string;
+  player_id: string | number;
   category: ScoreCategory;
 }
 
 export type ApiScoreMap = Record<ApiScoreCategory, number | null>;
 
 export interface ApiGamePlayer {
-  playerId: string;
+  playerId: string | number;
   name: string;
-  isAi: boolean;
-  scores: ApiScoreMap;
-  totalScore: number;
+  isAi?: boolean;
+  scores?: Partial<ApiScoreMap>;
+  totalScore?: number;
 }
 
 export interface ApiGameStatusData {
   gameId: string;
   gameMode: ApiGameMode;
-  currentPlayer: string | null;
+  currentPlayer?: string | number | null;
   players: ApiGamePlayer[];
-  dice: number[];
-  diceLocked: boolean[];
-  rollsLeft: number;
+  dice?: number[];
+  diceLocked?: boolean[];
+  rollsLeft?: number;
   status: ApiGameStatus;
   createdAt?: string | null;
   finishedAt?: string | null;
@@ -106,7 +106,7 @@ export interface ScoreSubmitSnapshot {
 }
 
 export interface QuitGameRequest {
-  player_id: string;
+  player_id: string | number;
 }
 
 export interface GamePlayerSnapshot {

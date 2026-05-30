@@ -4,7 +4,7 @@ import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { LockKeyhole, UserRound } from 'lucide-react';
+import { LockKeyhole, Phone, UserRound } from 'lucide-react';
 import loginBackground from '@/assets/images/backgrounds/login/login-bg.png';
 import diceIcon from '@/assets/images/ui/icons/骰子.png';
 import { useAuth } from '@/hooks';
@@ -15,6 +15,7 @@ type AuthTab = 'login' | 'register';
 interface LoginPageProps {
   searchParams?: {
     mode?: string;
+    reason?: string;
   };
 }
 
@@ -26,6 +27,7 @@ interface LoginFormState {
 
 interface RegisterFormState {
   nickname: string;
+  phone: string;
   password: string;
   confirmPassword: string;
   acceptedAgreement: boolean;
@@ -39,29 +41,43 @@ const initialLoginForm: LoginFormState = {
 
 const initialRegisterForm: RegisterFormState = {
   nickname: '',
+  phone: '',
   password: '',
   confirmPassword: '',
   acceptedAgreement: false,
 };
 
+function isWeakPassword(password: string) {
+  return /^(\d+|[a-zA-Z]+|.)\1*$/.test(password);
+}
+
 function getInitialAuthTab(mode?: string): AuthTab {
   return mode === 'login' ? 'login' : 'register';
+}
+
+function getInitialErrorMessage(reason?: string) {
+  return reason === 'auth-required' ? '请先登录后再继续' : '';
 }
 
 export default function LoginPage({ searchParams }: LoginPageProps) {
   const router = useRouter();
   const { login, register } = useAuth();
   const initialAuthTab = getInitialAuthTab(searchParams?.mode);
+  const initialErrorMessage = getInitialErrorMessage(searchParams?.reason);
   const [activeTab, setActiveTab] = useState<AuthTab>(initialAuthTab);
   const [loginForm, setLoginForm] = useState<LoginFormState>(initialLoginForm);
   const [registerForm, setRegisterForm] = useState<RegisterFormState>(initialRegisterForm);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(initialErrorMessage);
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setActiveTab(initialAuthTab);
   }, [initialAuthTab]);
+
+  useEffect(() => {
+    setErrorMessage(initialErrorMessage);
+  }, [initialErrorMessage]);
 
   const switchTab = (tab: AuthTab) => {
     setActiveTab(tab);
@@ -97,7 +113,11 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
 
   const validateRegister = () => {
     if (!registerForm.nickname.trim()) return '请输入用户昵称';
+    if (!registerForm.phone.trim()) return '请输入手机号';
+    if (!/^1\d{10}$/.test(registerForm.phone.trim())) return '请输入正确的 11 位手机号';
     if (!registerForm.password.trim()) return '请输入密码';
+    if (registerForm.password.length < 8 || registerForm.password.length > 20) return '密码长度需为 8-20 位字符';
+    if (isWeakPassword(registerForm.password)) return '密码过于简单，请使用更复杂的密码';
     if (!registerForm.confirmPassword.trim()) return '请再次输入密码';
     if (registerForm.password !== registerForm.confirmPassword) return '两次输入的密码不一致';
     if (!registerForm.acceptedAgreement) return '请先阅读并同意用户协议';
@@ -142,7 +162,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
     setIsSubmitting(true);
 
     try {
-      await register(registerForm.nickname.trim(), registerForm.password);
+      await register(registerForm.nickname.trim(), registerForm.phone.trim(), registerForm.password);
       setSuccessMessage('注册成功');
       setRegisterForm(initialRegisterForm);
       router.push('/');
@@ -235,6 +255,21 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
 
                 <label className={styles.fieldRow}>
                   <span>
+                    <Phone size={24} />
+                    手机号
+                  </span>
+                  <input
+                    type="tel"
+                    value={registerForm.phone}
+                    onChange={event => updateRegisterForm('phone', event.target.value)}
+                    placeholder="请输入手机号"
+                    autoComplete="tel"
+                  />
+                  <small>用于账号验证，也可作为登录账号</small>
+                </label>
+
+                <label className={styles.fieldRow}>
+                  <span>
                     <LockKeyhole size={24} />
                     密码
                   </span>
@@ -245,7 +280,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
                     placeholder="请输入密码"
                     autoComplete="new-password"
                   />
-                  <small>6-20位字符，需包含字母和数字</small>
+                  <small>8-20位字符，请避免过于简单的密码</small>
                 </label>
 
                 <label className={styles.fieldRow}>

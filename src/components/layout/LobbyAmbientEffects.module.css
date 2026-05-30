@@ -198,7 +198,7 @@
 }
 
 .ambientBird,
-.ambientBalloon {
+.ambientSkyObject {
   position: absolute;
   display: grid;
   place-items: center;
@@ -331,34 +331,29 @@
   transform-origin: left center;
 }
 
-.ambientBalloon {
-  color: rgba(255, 215, 102, 0.86);
+.ambientSkyObject {
   filter:
-    drop-shadow(0 0 9px rgba(255, 238, 158, 0.38))
+    drop-shadow(0 0 9px rgba(255, 238, 158, 0.26))
     drop-shadow(0 9px 16px rgba(35, 105, 205, 0.36));
 }
 
-.ambientBalloon:nth-child(13) {
-  top: 18%;
-  right: 20%;
+.ambientSkyImage {
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
 }
 
-.ambientBalloon:nth-child(14) {
-  top: 11%;
-  left: 33%;
-  color: rgba(128, 221, 255, 0.84);
-  transform: scale(0.82);
+.hotAirBalloonObject {
+  filter:
+    drop-shadow(0 12px 14px rgba(18, 68, 150, 0.26))
+    drop-shadow(0 0 10px rgba(255, 230, 148, 0.22));
 }
 
-.ambientBalloon:nth-child(15) {
-  top: 24%;
-  left: 73%;
-  color: rgba(255, 142, 210, 0.86);
-  transform: scale(0.72);
+.skyAirplaneObject {
+  filter:
+    drop-shadow(0 10px 14px rgba(18, 68, 150, 0.28))
+    drop-shadow(0 0 12px rgba(126, 234, 255, 0.24));
 }
-
-.ambientBalloon:nth-child(14) svg { transform: scale(0.86); }
-.ambientBalloon:nth-child(15) svg { transform: scale(0.76); }
 
 .oceanShimmer,
 .oceanWaveFoam,

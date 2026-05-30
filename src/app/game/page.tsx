@@ -16,7 +16,7 @@ import { ResponsiveStage } from '@/components/layout';
 import { GameChat, SoundToggle, StarIcon, type GameChatMessage } from '@/components/ui';
 import { CATEGORY_NAMES, LOWER_CATEGORIES, MAX_ROLLS_PER_TURN, SCORE_CATEGORIES } from '@/constants/gameRules';
 import gameBackground from '@/assets/images/backgrounds/game/game-bg.png';
-import { useHomeSoundSetting } from '@/hooks';
+import { useGameSocket, useHomeSoundSetting } from '@/hooks';
 import {
   getGameStatus,
   quitGame,
@@ -85,6 +85,7 @@ const avatarClasses = [
 ];
 
 const defaultGameEvents: GameEventItem[] = [];
+const emptyChatMessages: GameChatMessage[] = [];
 
 function delay(ms: number) {
   return new Promise(resolve => {
@@ -322,15 +323,6 @@ export default function GamePage() {
   const isSingleMode = isLocalMode && !queryState.roomId;
   const isRoomGame = Boolean(queryState.roomId && currentRoom);
   const showChat = isRoomGame || mode === 'online';
-  const gameChatMessages = useMemo<GameChatMessage[]>(
-    () => [
-      { id: 'game-system-start', type: 'system', author: '系统消息', text: `房间 ${roomId} 对局已开始。` },
-      { id: 'game-player-hello', type: 'player', author: selfPlayerName, avatar: player?.avatar, text: '大家好运~' },
-      { id: 'game-system-tip', type: 'system', author: '系统消息', text: '投骰后请选择一个计分项完成本回合。' },
-    ],
-    [player?.avatar, roomId, selfPlayerName]
-  );
-
   const players = useMemo<GamePlayer[]>(() => {
     if (serverGameStatus) {
       const orderedPlayers = [...serverGameStatus.players].sort((first, second) => {
@@ -654,6 +646,30 @@ export default function GamePage() {
     };
   }, [applyGameStatusSnapshot, refreshScoreBoard, queryState.gameId, selfPlayerId]);
 
+  const handleSocketGameStatus = useCallback(
+    (status: GameStatusSnapshot) => {
+      const gameId = queryState.gameId;
+      if (!gameId || status.gameId !== gameId) return;
+
+      applyGameStatusSnapshot(status);
+      void refreshScoreBoard(
+        gameId,
+        status.currentPlayer ?? selfPlayerId,
+        status.rollsLeft < MAX_ROLLS_PER_TURN
+      ).catch(error => {
+        console.error(error);
+      });
+    },
+    [applyGameStatusSnapshot, queryState.gameId, refreshScoreBoard, selfPlayerId]
+  );
+
+  useGameSocket({
+    gameId: queryState.gameId,
+    playerId: selfPlayerId,
+    enabled: Boolean(queryState.gameId && selfPlayerId),
+    onGameStatus: handleSocketGameStatus,
+  });
+
   useEffect(() => {
     const gameId = queryState.gameId;
     if (!isResultOpen || !gameId) return;
@@ -802,7 +818,8 @@ export default function GamePage() {
       isGameComplete =
         submitResult.isGameFinished ||
         submitResult.gameStatus === 3 ||
-        Object.keys(submittedPlayerScores).length >= SCORE_CATEGORIES.length;
+        submitResult.gameStatus === 'finished' ||
+        (players.length <= 1 && Object.keys(submittedPlayerScores).length >= SCORE_CATEGORIES.length);
 
       setServerGameStatus(current =>
         current
@@ -963,9 +980,10 @@ export default function GamePage() {
 
         {showChat && (
           <GameChat
+            key={queryState.gameId ?? roomId}
             className={styles.chatPanel}
             ariaLabel="聊天消息"
-            messages={gameChatMessages}
+            messages={emptyChatMessages}
             currentUserName={selfPlayerName}
             currentUserAvatar={player?.avatar}
             placeholder="说点什么..."

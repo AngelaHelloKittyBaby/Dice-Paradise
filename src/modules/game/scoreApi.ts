@@ -73,6 +73,11 @@ const categoryAliases: Record<string, ScoreCategory> = {
   yacht: 'yacht',
   yahtzee: 'yacht',
   chance: 'chance',
+  three_of_a_kind: 'threeOfAKind',
+  four_of_a_kind: 'fourOfAKind',
+  full_house: 'fullHouse',
+  small_straight: 'smallStraight',
+  large_straight: 'largeStraight',
 };
 
 function invertScoreItemIds(source: Record<ScoreCategory, number>) {
@@ -126,6 +131,10 @@ function unwrapScoreApiResponse<T>(response: ScoreApiEnvelope<T>, fallbackMessag
   return response.data;
 }
 
+function toBackendPlayerId(playerId: string | number) {
+  return String(playerId);
+}
+
 function detectScoreItemIdScheme(itemIds: number[]): ScoreItemIdScheme {
   return itemIds.includes(14) || (!itemIds.includes(7) && itemIds.some(itemId => itemId > 6))
     ? 'withBonusSlot'
@@ -173,12 +182,14 @@ function normalizeLockedItem(item: LockedScoreItemData, scheme: ScoreItemIdSchem
 }
 
 function normalizeLockStatus(data: ScoreLockStatusData): ScoreLockStatusSnapshot {
-  const itemIds = [...data.lockedItems.map(item => item.itemId), ...data.unlockedItems];
+  const lockedItemsData = data.lockedItems ?? [];
+  const unlockedItemIds = data.unlockedItems ?? [];
+  const itemIds = [...lockedItemsData.map(item => item.itemId), ...unlockedItemIds];
   const scheme = detectScoreItemIdScheme(itemIds);
-  const lockedItems = data.lockedItems
+  const lockedItems = lockedItemsData
     .map(item => normalizeLockedItem(item, scheme))
     .filter((item): item is LockedScoreItemSnapshot => Boolean(item));
-  const unlockedCategories = data.unlockedItems
+  const unlockedCategories = unlockedItemIds
     .map(itemId => scoreItemIdToCategory(itemId, scheme))
     .filter((category): category is ScoreCategory => Boolean(category));
   const scores = lockedItems.reduce<Partial<Record<ScoreCategory, number>>>(
@@ -192,7 +203,7 @@ function normalizeLockStatus(data: ScoreLockStatusData): ScoreLockStatusSnapshot
   return {
     playerId: String(data.playerId),
     lockedItems,
-    unlockedItemIds: data.unlockedItems,
+    unlockedItemIds,
     unlockedCategories,
     completedCategories: lockedItems.map(item => item.category),
     scores,
@@ -213,27 +224,31 @@ function normalizePossibleScores(data: PossibleScoresData): PossibleScoreSnapsho
 
 function normalizeSubmitScoreData(
   data: SubmitScoreItemData,
-  submittedCategory: ScoreCategory
+  submittedCategory: ScoreCategory,
+  submittedPlayerId: string | number
 ): SubmitScoreItemSnapshot {
   const category = submittedCategory;
+  const submitSuccess = data.submit_success ?? true;
+  const gameStatus = data.game_status ?? data.gameState?.status ?? 'playing';
+  const nextPlayerId = data.next_player_id ?? data.nextPlayer;
 
-  if (!data.submit_success) {
+  if (!submitSuccess) {
     throw new GameApiError('提交计分失败');
   }
 
   return {
-    submitSuccess: data.submit_success,
-    playerId: String(data.player_id),
-    scoreItemId: data.score_item_id,
+    submitSuccess,
+    playerId: String(data.player_id ?? submittedPlayerId),
+    scoreItemId: data.score_item_id ?? categoryToScoreItemId(category),
     category,
-    scoreValue: data.score_value,
-    totalScore: data.total_score,
-    upperScore: data.upper_score,
-    lowerScore: data.lower_score,
-    bonusScore: data.bonus_score,
-    gameStatus: data.game_status,
-    nextPlayerId: data.next_player_id === null ? null : String(data.next_player_id),
-    isGameFinished: data.game_status === 3,
+    scoreValue: data.score_value ?? data.score ?? 0,
+    totalScore: data.total_score ?? data.totalScore ?? 0,
+    upperScore: data.upper_score ?? data.upperScore ?? 0,
+    lowerScore: data.lower_score ?? data.lowerScore ?? 0,
+    bonusScore: data.bonus_score ?? data.bonusScore ?? 0,
+    gameStatus,
+    nextPlayerId: nextPlayerId === null || nextPlayerId === undefined ? null : String(nextPlayerId),
+    isGameFinished: data.isGameFinished ?? (gameStatus === 3 || gameStatus === 'finished'),
   };
 }
 
@@ -259,7 +274,7 @@ export async function getScoreLockStatus(
       `/score/game/${gameId}/lock-status`,
       {
         params: {
-          player_id: playerId,
+          player_id: toBackendPlayerId(playerId),
         },
       }
     );
@@ -287,10 +302,15 @@ export async function submitScoreItem(
       `/game/${gameId}/score`,
       {
         ...request,
+        player_id: toBackendPlayerId(request.player_id),
         category: toBackendScoreCategory(request.category),
       }
     );
-    return normalizeSubmitScoreData(unwrapScoreApiResponse(response.data, '提交计分失败'), request.category);
+    return normalizeSubmitScoreData(
+      unwrapScoreApiResponse(response.data, '提交计分失败'),
+      request.category,
+      request.player_id
+    );
   } catch (error) {
     throw toScoreApiError(error, '提交计分失败');
   }

@@ -4,13 +4,13 @@ import type {
   ApiRoomData,
   ApiRoomListItem,
   CreateOnlineRoomRequest,
-  DismissOnlineRoomRequest,
   JoinOnlineRoomData,
   JoinOnlineRoomRequest,
+  KickOnlineRoomRequest,
   LeaveOnlineRoomRequest,
   RoomListResponseData,
+  SetOnlineRoomReadyRequest,
   StartOnlineRoomData,
-  StartOnlineRoomRequest,
 } from '@/types/roomApi';
 import type { Room, RoomListItem, RoomMember } from '@/types/room';
 
@@ -18,6 +18,23 @@ interface RoomApiEnvelope<T> {
   code: number;
   msg: string;
   data: T;
+}
+
+interface RoomApiErrorEnvelope {
+  msg?: string;
+  message?: string;
+  data?: unknown;
+}
+
+interface AxiosLikeRoomError {
+  response?: {
+    data?: RoomApiErrorEnvelope;
+  };
+}
+
+interface RecoveredRoomSession {
+  room: Room;
+  playerId: string;
 }
 
 const apiClient = createApiClient();
@@ -42,6 +59,24 @@ function normalizeRoomPlayerId(playerId: string | number | null | undefined) {
   return playerId === null || playerId === undefined ? '' : String(playerId);
 }
 
+function normalizeOptionalText(value: string | null | undefined, fallback = '') {
+  return value?.trim() || fallback;
+}
+
+type ApiRoomPlayerData = NonNullable<ApiRoomData['players']>[number];
+
+function getApiRoomPlayerId(player: ApiRoomPlayerData) {
+  return normalizeRoomPlayerId(player.playerId ?? player.player_id);
+}
+
+function getApiRoomPlayerName(player: ApiRoomPlayerData) {
+  return normalizeOptionalText(player.name ?? player.username, '乐乐玩家');
+}
+
+function isApiRoomHostPlayer(player: ApiRoomPlayerData) {
+  return Boolean(player.isHost ?? player.is_host);
+}
+
 function toBackendRoomPlayerId(playerId: string | number) {
   const numericPlayerId = typeof playerId === 'number' ? playerId : Number(playerId);
 
@@ -50,37 +85,150 @@ function toBackendRoomPlayerId(playerId: string | number) {
 
 export function normalizeRoomData(data: ApiRoomData): Room {
   const joinedAt = new Date().toISOString();
-  const explicitHostId = normalizeRoomPlayerId(data.players.find(player => player.isHost)?.playerId);
+  const players = data.players ?? data.members ?? [];
+  const explicitHost = players.find(isApiRoomHostPlayer);
+  const explicitHostId = normalizeRoomPlayerId(explicitHost?.playerId ?? explicitHost?.player_id);
+  const backendHostId = normalizeRoomPlayerId(
+    data.hostId ?? data.host_id ?? data.ownerId ?? data.owner_id ?? data.creatorId ?? data.creator_id
+  );
   const normalizedHostId =
     explicitHostId ||
-    normalizeRoomPlayerId(
-      data.players.find(player => normalizeRoomPlayerId(player.playerId) === normalizeRoomPlayerId(data.hostId))?.playerId
-    ) ||
-    normalizeRoomPlayerId(data.players[0]?.playerId) ||
-    normalizeRoomPlayerId(data.hostId);
-  const members: RoomMember[] = data.players.map(player => ({
-    playerId: normalizeRoomPlayerId(player.playerId),
-    name: player.name,
-    avatar: getRoomMemberAvatar(normalizeRoomPlayerId(player.playerId)),
-    isHost: normalizeRoomPlayerId(player.playerId) === normalizedHostId,
-    isReady: normalizeRoomPlayerId(player.playerId) === normalizedHostId,
-    joinedAt,
-    points: player.points ?? 0,
-  }));
+    normalizeRoomPlayerId(players.find(player => getApiRoomPlayerId(player) === backendHostId)?.playerId) ||
+    normalizeRoomPlayerId(players.find(player => getApiRoomPlayerId(player) === backendHostId)?.player_id) ||
+    backendHostId;
+  const members: RoomMember[] = players.map(player => {
+    const playerId = getApiRoomPlayerId(player);
+    const isHost = Boolean(normalizedHostId && playerId === normalizedHostId);
+
+    return {
+      playerId,
+      name: getApiRoomPlayerName(player),
+      avatar: getRoomMemberAvatar(playerId),
+      isHost,
+      isReady: isHost || Boolean(player.isReady ?? player.is_ready),
+      joinedAt,
+      points: player.points ?? 0,
+    };
+  });
 
   return {
-    id: data.roomCode,
-    name: data.roomName,
+    id: normalizeOptionalText(data.roomCode ?? data.room_code ?? data.id),
+    name: normalizeOptionalText(data.roomName ?? data.room_name, '联机房间'),
     hostId: normalizedHostId,
     members,
     settings: {
-      maxPlayers: data.maxPlayers,
+      maxPlayers: data.maxPlayers ?? data.max_players ?? 4,
       isPrivate: false,
       roundTime: 30,
       autoStart: false,
     },
-    status: data.status,
+    status: data.status ?? 'waiting',
     createdAt: joinedAt,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getRoomApiErrorEnvelope(error: unknown): RoomApiErrorEnvelope | null {
+  if (!isRecord(error)) return null;
+
+  const response = (error as AxiosLikeRoomError).response;
+  return response?.data ?? null;
+}
+
+export function getRoomApiErrorMessage(error: unknown, fallbackMessage: string) {
+  const envelope = getRoomApiErrorEnvelope(error);
+
+  if (typeof envelope?.msg === 'string' && envelope.msg.trim()) return envelope.msg;
+  if (typeof envelope?.message === 'string' && envelope.message.trim()) return envelope.message;
+  if (error instanceof Error && error.message.trim()) return error.message;
+
+  return fallbackMessage;
+}
+
+export function isAlreadyInRoomError(error: unknown) {
+  const message = getRoomApiErrorMessage(error, '');
+
+  return message.includes('已在房间') || message.toLowerCase().includes('already in');
+}
+
+function findApiRoomData(value: unknown): ApiRoomData | null {
+  if (!isRecord(value)) return null;
+
+  const directPlayers = value.players ?? value.members;
+  const directRoomCode = value.roomCode ?? value.room_code ?? value.id;
+  if (Array.isArray(directPlayers) && (typeof directRoomCode === 'string' || typeof directRoomCode === 'number')) {
+    return value as unknown as ApiRoomData;
+  }
+
+  const roomKeys = ['room', 'currentRoom', 'current_room', 'roomInfo', 'room_info'];
+  for (const key of roomKeys) {
+    const nestedRoom = findApiRoomData(value[key]);
+    if (nestedRoom) return nestedRoom;
+  }
+
+  return null;
+}
+
+function findRoomCode(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+
+  const roomCode = value.roomCode ?? value.room_code ?? value.roomId ?? value.room_id;
+  if (typeof roomCode === 'string' || typeof roomCode === 'number') return String(roomCode);
+
+  const roomKeys = ['data', 'room', 'currentRoom', 'current_room', 'roomInfo', 'room_info'];
+  for (const key of roomKeys) {
+    const nestedRoomCode = findRoomCode(value[key]);
+    if (nestedRoomCode) return nestedRoomCode;
+  }
+
+  return null;
+}
+
+function findPlayerId(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+
+  const playerId = value.playerId ?? value.player_id;
+  if (typeof playerId === 'string' || typeof playerId === 'number') return String(playerId);
+
+  const nestedKeys = ['data', 'room', 'currentRoom', 'current_room', 'roomInfo', 'room_info'];
+  for (const key of nestedKeys) {
+    const nestedPlayerId = findPlayerId(value[key]);
+    if (nestedPlayerId) return nestedPlayerId;
+  }
+
+  return null;
+}
+
+function findPlayerIdByName(room: Room, playerName?: string) {
+  if (!playerName) return '';
+
+  return room.members.find(member => member.name === playerName)?.playerId ?? '';
+}
+
+export async function recoverJoinedRoomSession(
+  error: unknown,
+  fallbackPlayerName?: string
+): Promise<RecoveredRoomSession | null> {
+  if (!isAlreadyInRoomError(error)) return null;
+
+  const envelope = getRoomApiErrorEnvelope(error);
+  const payload = envelope?.data ?? envelope;
+  const payloadRoom = findApiRoomData(payload);
+  const room = payloadRoom ? normalizeRoomData(payloadRoom) : null;
+  const roomCode = room?.id || findRoomCode(payload);
+  const recoveredRoom = room ?? (roomCode ? await getOnlineRoom(roomCode) : null);
+
+  if (!recoveredRoom) return null;
+
+  const playerId = findPlayerId(payload) || findPlayerIdByName(recoveredRoom, fallbackPlayerName);
+  if (!playerId) return null;
+
+  return {
+    room: recoveredRoom,
+    playerId,
   };
 }
 
@@ -119,9 +267,15 @@ export async function joinOnlineRoom(request: JoinOnlineRoomRequest): Promise<{ 
     console.log('✅ [joinOnlineRoom] 成功响应:', JSON.stringify(response.data));
     const data = unwrapRoomApiResponse(response.data, '加入房间失败');
 
+    const playerId = normalizeRoomPlayerId(data.playerId ?? data.player_id);
+
+    if (!playerId) {
+      throw new Error('Join room failed: response is missing playerId');
+    }
+
     return {
       room: normalizeRoomData(data.room),
-      playerId: normalizeRoomPlayerId(data.playerId),
+      playerId,
     };
   } catch (error: any) {
     console.error('❌ [joinOnlineRoom] 错误详情:', {
@@ -149,6 +303,38 @@ export async function getOnlineRoom(roomCode: string): Promise<Room> {
   }
 }
 
+export async function getCurrentOnlineRoom(
+  fallbackPlayerId?: string,
+  fallbackPlayerName?: string
+): Promise<RecoveredRoomSession | null> {
+  const response = await apiClient.get<RoomApiEnvelope<unknown | null>>('/room/current');
+
+  if (response.data.code !== 200) {
+    throw new Error(response.data.msg || 'Get current room failed');
+  }
+
+  if (!response.data.data) return null;
+
+  const payload = response.data.data;
+  const roomData = findApiRoomData(payload);
+
+  if (!roomData) {
+    throw new Error('Get current room failed: response is missing room');
+  }
+
+  const room = normalizeRoomData(roomData);
+  const playerId =
+    findPlayerId(payload) ||
+    room.members.find(member => member.playerId === fallbackPlayerId)?.playerId ||
+    findPlayerIdByName(room, fallbackPlayerName);
+
+  if (!playerId) {
+    throw new Error('Get current room failed: response is missing playerId');
+  }
+
+  return { room, playerId };
+}
+
 export async function getWaitingRoomList(): Promise<RoomListItem[]> {
   console.log('📋 [getWaitingRoomList] 获取等待中的房间列表');
   try {
@@ -171,34 +357,43 @@ export async function getWaitingRoomList(): Promise<RoomListItem[]> {
 }
 
 export async function leaveOnlineRoom(request: LeaveOnlineRoomRequest): Promise<void> {
-  const response = await apiClient.post<RoomApiEnvelope<null>>('/room/leave', {
-    ...request,
-    player_id: toBackendRoomPlayerId(request.player_id),
-  });
+  const response = await apiClient.post<RoomApiEnvelope<null>>('/room/leave', request);
 
   if (response.data.code !== 200) {
     throw new Error(response.data.msg || '退出房间失败');
   }
 }
 
-export async function dismissOnlineRoom(roomCode: string, request: DismissOnlineRoomRequest): Promise<void> {
-  const response = await apiClient.delete<RoomApiEnvelope<null>>(`/room/${roomCode}`, {
-    data: {
-      ...request,
-      player_id: toBackendRoomPlayerId(request.player_id),
-    },
-  });
+export async function dismissOnlineRoom(roomCode: string): Promise<void> {
+  const response = await apiClient.delete<RoomApiEnvelope<null>>(`/room/${roomCode}`);
 
   if (response.data.code !== 200) {
     throw new Error(response.data.msg || '解散房间失败');
   }
 }
 
-export async function startOnlineRoom(roomCode: string, request: StartOnlineRoomRequest): Promise<StartOnlineRoomData> {
-  const response = await apiClient.post<RoomApiEnvelope<StartOnlineRoomData>>(`/room/${roomCode}/start`, {
-    ...request,
-    player_id: toBackendRoomPlayerId(request.player_id),
+export async function kickOnlineRoom(roomCode: string, request: KickOnlineRoomRequest): Promise<Room> {
+  const response = await apiClient.post<RoomApiEnvelope<ApiRoomData>>(`/room/${roomCode}/kick`, {
+    target_player_id: toBackendRoomPlayerId(request.target_player_id),
   });
 
-  return unwrapRoomApiResponse(response.data, '开始游戏失败');
+  return normalizeRoomData(unwrapRoomApiResponse(response.data, 'Kick player failed'));
+}
+
+export async function setOnlineRoomReady(roomCode: string, request: SetOnlineRoomReadyRequest): Promise<Room> {
+  const response = await apiClient.post<RoomApiEnvelope<ApiRoomData>>(`/room/${roomCode}/ready`, request);
+
+  return normalizeRoomData(unwrapRoomApiResponse(response.data, 'Set ready status failed'));
+}
+
+export async function startOnlineRoom(roomCode: string): Promise<StartOnlineRoomData> {
+  const response = await apiClient.post<RoomApiEnvelope<StartOnlineRoomData>>(`/room/${roomCode}/start`);
+
+  const data = unwrapRoomApiResponse(response.data, '开始游戏失败');
+
+  if (!data.gameId || !data.roomCode) {
+    throw new Error('Start game failed: response is missing gameId or roomCode');
+  }
+
+  return data;
 }

@@ -1,7 +1,7 @@
 import type { ScoreCategory } from './game';
 
 export interface ScorePanelPlayerData {
-  playerId: number;
+  playerId: string | number;
   username: string;
   avatar: string;
   playerOrder: number;
@@ -18,9 +18,9 @@ export interface LockedScoreItemData {
 }
 
 export interface ScoreLockStatusData {
-  playerId: number;
-  lockedItems: LockedScoreItemData[];
-  unlockedItems: number[];
+  playerId: string | number;
+  lockedItems?: LockedScoreItemData[];
+  unlockedItems?: number[];
 }
 
 export interface PossibleScoresData {
@@ -28,21 +28,32 @@ export interface PossibleScoresData {
 }
 
 export interface SubmitScoreItemRequest {
-  player_id: string;
+  player_id: string | number;
   category: ScoreCategory;
 }
 
 export interface SubmitScoreItemData {
-  submit_success: boolean;
-  player_id: number;
-  score_item_id: number;
-  score_value: number;
-  total_score: number;
-  upper_score: number;
-  lower_score: number;
-  bonus_score: number;
-  game_status: number;
-  next_player_id: number | null;
+  category?: string;
+  score?: number;
+  upperScore?: number;
+  lowerScore?: number;
+  bonusScore?: number;
+  totalScore?: number;
+  gameState?: {
+    status?: number | string;
+  };
+  nextPlayer?: string | null;
+  isGameFinished?: boolean;
+  submit_success?: boolean;
+  player_id?: string | number;
+  score_item_id?: number;
+  score_value?: number;
+  total_score?: number;
+  upper_score?: number;
+  lower_score?: number;
+  bonus_score?: number;
+  game_status?: number | string;
+  next_player_id?: string | number | null;
 }
 
 export interface ScorePanelPlayerSnapshot {
